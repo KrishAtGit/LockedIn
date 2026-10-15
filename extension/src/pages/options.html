@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>LockedIn settings</title>
+    <link rel="stylesheet" href="./style.css" />
+    <style>
+      main {
+        max-width: 640px;
+        margin: 32px auto;
+        padding: 0 16px;
+        display: grid;
+        gap: 16px;
+      }
+      label {
+        display: grid;
+        gap: 4px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 12px;
+      }
+      .card {
+        display: grid;
+        gap: 12px;
+      }
+      .add {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .add input[type='text'] {
+        flex: 1;
+        min-width: 160px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      td {
+        padding: 6px 0;
+        border-top: 1px solid var(--border);
+      }
+      td:last-child {
+        text-align: right;
+      }
+      #excuses {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 8px;
+      }
+      #saved {
+        color: var(--ok);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div>
+        <h1>LockedIn settings</h1>
+        <p class="muted small" style="margin: 0">Limits reset at midnight. Changes save automatically.</p>
+      </div>
+
+      <section class="card">
+        <h2>General</h2>
+        <div class="grid">
+          <label>
+            Default limit per site (minutes)
+            <input type="number" id="default-limit" min="1" max="1440" />
+          </label>
+          <label>
+            Warn me before (minutes)
+            <input type="number" id="warn-before" min="0" max="60" />
+          </label>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Site limits</h2>
+        <form class="add" id="add-limit">
+          <input type="text" id="limit-domain" placeholder="youtube.com" required />
+          <input type="number" id="limit-minutes" placeholder="minutes" min="1" max="1440" required />
+          <button type="submit">Add</button>
+        </form>
+        <table><tbody id="limits"></tbody></table>
+      </section>
+
+      <section class="card">
+        <h2>Study sites (never limited)</h2>
+        <label>
+          <span class="muted small">One domain per line. Subdomains are included.</span>
+          <textarea id="allowlist" rows="5"></textarea>
+        </label>
+      </section>
+
+      <section class="card">
+        <h2>Your reasons for more time</h2>
+        <ul id="excuses"></ul>
+      </section>
+
+      <span class="small" id="saved"></span>
+    </main>
+    <script type="module" src="./options.ts"></script>
+  </body>
+</html>

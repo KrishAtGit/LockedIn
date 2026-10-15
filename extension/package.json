@@ -1,0 +1,21 @@
+{
+  "name": "lockedin-extension",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "TARGET=chrome vite build --watch --mode development",
+    "dev:firefox": "TARGET=firefox vite build --watch --mode development",
+    "typecheck": "tsc",
+    "build": "tsc && TARGET=chrome vite build && TARGET=firefox vite build",
+    "icons": "node scripts/make-icons.mjs"
+  },
+  "devDependencies": {
+    "@types/webextension-polyfill": "^0.12.6",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0"
+  },
+  "dependencies": {
+    "webextension-polyfill": "^0.12.0"
+  }
+}

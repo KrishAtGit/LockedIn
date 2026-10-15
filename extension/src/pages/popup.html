@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>LockedIn</title>
+    <link rel="stylesheet" href="./style.css" />
+    <style>
+      body {
+        width: 340px;
+        padding: 16px;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 12px;
+      }
+      ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 12px;
+      }
+      .row {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 4px;
+      }
+      .domain {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .tag {
+        font-size: 11px;
+        color: var(--ok);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>Today</h1>
+        <span class="muted small" id="total"></span>
+      </div>
+      <a href="#" id="open-options" class="small">Settings</a>
+    </header>
+    <ul id="list"></ul>
+    <p class="muted small" id="empty" hidden>Nothing tracked yet today. Go do something!</p>
+    <script type="module" src="./popup.ts"></script>
+  </body>
+</html>

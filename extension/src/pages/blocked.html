@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Time's up · LockedIn</title>
+    <link rel="stylesheet" href="./style.css" />
+    <style>
+      main {
+        max-width: 520px;
+        margin: 10vh auto;
+        padding: 0 16px;
+        display: grid;
+        gap: 16px;
+      }
+      h1 {
+        font-size: 26px;
+      }
+      form {
+        display: grid;
+        gap: 10px;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div>
+        <h1 id="title">Time's up</h1>
+        <p class="muted" id="summary"></p>
+      </div>
+
+      <form class="card" id="negotiate">
+        <h2>Need more time?</h2>
+        <p class="muted small" style="margin: 0">
+          Say what you're doing. Be honest, because you'll see these reasons in your weekly report.
+        </p>
+        <textarea id="reason" rows="3" placeholder="e.g. Finishing the last 10 minutes of the week 6 lecture"></textarea>
+        <div class="actions">
+          <button type="submit" class="primary" data-minutes="5" disabled>+5 min</button>
+          <button type="submit" data-minutes="15" disabled>+15 min</button>
+        </div>
+        <span class="muted small" id="hint"></span>
+      </form>
+
+      <div class="actions">
+        <button id="close">Close this tab</button>
+      </div>
+    </main>
+    <script type="module" src="./blocked.ts"></script>
+  </body>
+</html>
