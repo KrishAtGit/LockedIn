@@ -1,0 +1,35 @@
+# Runs the LockedIn API and its database. Ollama runs natively on your machine (it's much faster
+# there on a Mac than inside Docker), and the API reaches it through host.docker.internal.
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: lockedin
+      POSTGRES_PASSWORD: lockedin
+      POSTGRES_DB: lockedin
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lockedin"]
+      interval: 2s
+      retries: 15
+
+  api:
+    build: ./backend
+    environment:
+      LOCKEDIN_DATABASE_URL: postgresql+asyncpg://lockedin:lockedin@db:5432/lockedin
+      LOCKEDIN_OLLAMA_URL: http://host.docker.internal:11434
+      LOCKEDIN_OLLAMA_MODEL: ${LOCKEDIN_OLLAMA_MODEL:-llama3.2:3b}
+      LOCKEDIN_AI_ENABLED: ${LOCKEDIN_AI_ENABLED:-true}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

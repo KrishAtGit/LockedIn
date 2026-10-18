@@ -2,7 +2,7 @@
 
 A study-aware focus extension for uni students. It knows a lecture from a rabbit hole, gets stricter as your deadlines approach, and asks *why* before it blocks.
 
-> Status: early development (week 1 of 4). Not on any extension store. Install from GitHub Releases or build from source.
+> Status: early development (week 2 of 4). Not on any extension store. Install from GitHub Releases or build from source.
 
 ## Features
 
@@ -13,11 +13,15 @@ A study-aware focus extension for uni students. It knows a lecture from a rabbit
 - When the limit hits, the tab goes to a **"Need more time?"** page. You have to write a reason and wait, and the wait gets longer each time you ask.
 - Every reason is logged so you can look back at your excuses.
 
+**Backend (in progress, see [`backend/`](backend/README.md))**
+- FastAPI + Postgres service that labels pages as study / distraction / neutral: built-in rules first, then a cache, then a local Ollama model. No API keys or subscriptions.
+- Judges "need more time" reasons with the same local model.
+- Runs with one `docker compose up`.
+
 **Planned**
-- AI intent classification: YouTube lecture = study, YouTube Shorts = distraction.
+- Connect the extension to the backend, so a YouTube lecture counts as study and Shorts don't.
 - Deadline-adaptive limits from Canvas / Moodle / Google Calendar.
-- AI judging your "need more time" reasons.
-- Self-hostable backend (Docker) plus a deployed AWS instance (Terraform).
+- Deployed demo instance on AWS (Terraform).
 - Weekly insights report.
 
 ## Install (from source)
@@ -53,6 +57,8 @@ After a rebuild, hit the reload icon on the extension card in `chrome://extensio
 ## Project structure
 
 ```
+backend/                # FastAPI API, see backend/README.md
+docker-compose.yml      # API + Postgres
 extension/
 ├── src/
 │   ├── background.ts   # time tracking, limit enforcement, grants
@@ -65,7 +71,7 @@ extension/
 
 ## Privacy
 
-All tracking data stays in your browser (`storage.local`). Nothing is sent anywhere.
+All tracking data stays in your browser (`storage.local`). Nothing is sent anywhere yet. Once the extension uses the backend, it will send only the domain, path and title of the current page to a server *you* run.
 
 ## License
 
