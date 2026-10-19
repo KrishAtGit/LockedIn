@@ -33,6 +33,15 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+      #current {
+        margin: 0 0 12px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: var(--surface);
+      }
+      #current[data-state='offline'] {
+        color: var(--warn);
+      }
       .tag {
         font-size: 11px;
         color: var(--ok);
@@ -47,6 +56,7 @@
       </div>
       <a href="#" id="open-options" class="small">Settings</a>
     </header>
+    <p class="small" id="current" hidden></p>
     <ul id="list"></ul>
     <p class="muted small" id="empty" hidden>Nothing tracked yet today. Go do something!</p>
     <script type="module" src="./popup.ts"></script>

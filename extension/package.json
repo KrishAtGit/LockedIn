@@ -4,11 +4,13 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "TARGET=chrome vite build --watch --mode development",
-    "dev:firefox": "TARGET=firefox vite build --watch --mode development",
+    "dev": "rm -rf dist/chrome && TARGET=chrome vite build --watch --mode development & TARGET=chrome vite build -c vite.content.config.ts --watch --mode development & wait",
+    "dev:firefox": "rm -rf dist/firefox && TARGET=firefox vite build --watch --mode development & TARGET=firefox vite build -c vite.content.config.ts --watch --mode development & wait",
     "typecheck": "tsc",
-    "build": "tsc && TARGET=chrome vite build && TARGET=firefox vite build",
-    "icons": "node scripts/make-icons.mjs"
+    "build": "tsc && rm -rf dist && npm run build:target --target=chrome && npm run build:target --target=firefox",
+    "icons": "node scripts/make-icons.mjs",
+    "api:types": "uv run --directory ../backend python -m scripts.export_openapi > ../backend/openapi.json && npx -y openapi-typescript@7.13.0 ../backend/openapi.json -o src/lib/api-types.ts",
+    "build:target": "TARGET=$npm_config_target vite build && TARGET=$npm_config_target vite build -c vite.content.config.ts"
   },
   "devDependencies": {
     "@types/webextension-polyfill": "^0.12.6",

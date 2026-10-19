@@ -52,6 +52,19 @@
         display: grid;
         gap: 8px;
       }
+      .toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      #backend-status[data-ok='true'],
+      .allowed {
+        color: var(--ok);
+      }
+      #backend-status[data-ok='false'],
+      .denied {
+        color: var(--over);
+      }
       #saved {
         color: var(--ok);
       }
@@ -76,6 +89,10 @@
             <input type="number" id="warn-before" min="0" max="60" />
           </label>
         </div>
+        <label class="toggle">
+          <input type="checkbox" id="show-timer" />
+          Show a floating timer on websites
+        </label>
       </section>
 
       <section class="card">
@@ -94,6 +111,27 @@
           <span class="muted small">One domain per line. Subdomains are included.</span>
           <textarea id="allowlist" rows="5"></textarea>
         </label>
+      </section>
+
+      <section class="card">
+        <h2>AI backend</h2>
+        <p class="muted small" style="margin: 0">
+          Lets LockedIn tell a lecture from a rabbit hole: study pages stop counting toward your limits, and your
+          reasons for more time get checked. When this is on, the address and title of the page you're on are sent to
+          the server below, which you run yourself. See the backend README to set it up.
+        </p>
+        <label class="toggle">
+          <input type="checkbox" id="backend-enabled" />
+          Use the AI backend
+        </label>
+        <label>
+          Server address
+          <input type="url" id="backend-url" placeholder="http://localhost:8000" />
+        </label>
+        <div class="add">
+          <button type="button" id="backend-test">Test connection</button>
+          <span class="small" id="backend-status" role="status"></span>
+        </div>
       </section>
 
       <section class="card">

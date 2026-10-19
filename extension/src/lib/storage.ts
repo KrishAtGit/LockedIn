@@ -9,6 +9,15 @@ export interface Settings {
   /** Domains that are never limited (e.g. your LMS). */
   allowlist: string[]
   warnBeforeMin: number
+  /** Show the floating timer on websites. */
+  showTimer: boolean
+  backend: BackendSettings
+}
+
+export interface BackendSettings {
+  /** Off by default: when on, page titles are sent to this server to be classified. */
+  enabled: boolean
+  url: string
 }
 
 export interface Excuse {
@@ -16,6 +25,10 @@ export interface Excuse {
   domain: string
   reason: string
   minutes: number
+  /** Missing on reasons logged before the AI judge existed, which were always allowed. */
+  verdict?: 'allowed' | 'denied'
+  /** What the judge said back. */
+  reply?: string
 }
 
 /** date -> domain -> milliseconds */
@@ -26,18 +39,22 @@ export const DEFAULT_SETTINGS: Settings = {
   limits: {},
   allowlist: ['canvas.instructure.com', 'moodle.org', 'scholar.google.com'],
   warnBeforeMin: 5,
+  showTimer: true,
+  backend: { enabled: false, url: 'http://localhost:8000' },
 }
 
 export async function getSettings(): Promise<Settings> {
   const { settings } = await browser.storage.local.get('settings')
-  return { ...DEFAULT_SETTINGS, ...(settings as Partial<Settings> | undefined) }
+  const saved = (settings as Partial<Settings> | undefined) ?? {}
+  return { ...DEFAULT_SETTINGS, ...saved, backend: { ...DEFAULT_SETTINGS.backend, ...saved.backend } }
 }
 
 export async function saveSettings(settings: Settings): Promise<void> {
   await browser.storage.local.set({ settings })
 }
 
-export async function getDaily(key: 'usage' | 'grants'): Promise<DailyMap> {
+/** usage: time that counts toward limits. study: time on pages the AI marked as study, which doesn't. */
+export async function getDaily(key: 'usage' | 'study' | 'grants'): Promise<DailyMap> {
   const result = await browser.storage.local.get(key)
   return (result[key] as DailyMap | undefined) ?? {}
 }

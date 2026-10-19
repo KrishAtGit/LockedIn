@@ -1,0 +1,438 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "LockedIn API",
+    "description": "Classifies pages as study or distraction and judges requests for more time.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/classify": {
+      "post": {
+        "tags": [
+          "focus"
+        ],
+        "summary": "Classify",
+        "description": "Labels a page as study, distraction or neutral.",
+        "operationId": "classify_classify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClassifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassifyResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/judge-reason": {
+      "post": {
+        "tags": [
+          "focus"
+        ],
+        "summary": "Judge Reason",
+        "description": "Decides whether a reason for more time on a site is good enough.",
+        "operationId": "judge_reason_judge_reason_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JudgeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JudgeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stats": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "Stats",
+        "description": "How requests were answered since the server started, including the cache hit rate.",
+        "operationId": "stats_stats_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stats"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ClassifyRequest": {
+        "properties": {
+          "domain": {
+            "type": "string",
+            "maxLength": 253,
+            "minLength": 1,
+            "title": "Domain",
+            "examples": [
+              "youtube.com"
+            ]
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Path",
+            "default": "/",
+            "examples": [
+              "/watch"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Title",
+            "default": "",
+            "examples": [
+              "Lecture 6: Dynamic Programming - MIT 6.006"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "domain"
+        ],
+        "title": "ClassifyRequest"
+      },
+      "ClassifyResponse": {
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "study",
+              "distraction",
+              "neutral"
+            ],
+            "title": "Category"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "rules",
+              "cache",
+              "ai",
+              "fallback"
+            ],
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "category",
+          "confidence",
+          "reason",
+          "source"
+        ],
+        "title": "ClassifyResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Health": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ok",
+            "title": "Status"
+          },
+          "database": {
+            "type": "boolean",
+            "title": "Database"
+          },
+          "ai": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "unavailable",
+              "disabled"
+            ],
+            "title": "Ai"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "database",
+          "ai",
+          "model"
+        ],
+        "title": "Health"
+      },
+      "JudgeRequest": {
+        "properties": {
+          "domain": {
+            "type": "string",
+            "maxLength": 253,
+            "minLength": 1,
+            "title": "Domain",
+            "examples": [
+              "youtube.com"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "examples": [
+              "Finishing the last 10 minutes of the week 6 lecture"
+            ]
+          },
+          "minutes": {
+            "type": "integer",
+            "maximum": 120.0,
+            "minimum": 1.0,
+            "title": "Minutes",
+            "examples": [
+              15
+            ]
+          },
+          "asks_today": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Asks Today",
+            "description": "Extra-time requests already made today for this site",
+            "default": 0
+          },
+          "used_minutes": {
+            "type": "integer",
+            "maximum": 1440.0,
+            "minimum": 0.0,
+            "title": "Used Minutes",
+            "description": "Minutes already spent on this site today",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "domain",
+          "reason",
+          "minutes"
+        ],
+        "title": "JudgeRequest"
+      },
+      "JudgeResponse": {
+        "properties": {
+          "allow": {
+            "type": "boolean",
+            "title": "Allow"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "One short line shown to the student"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "ai",
+              "fallback"
+            ],
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "allow",
+          "message",
+          "source"
+        ],
+        "title": "JudgeResponse"
+      },
+      "Stats": {
+        "properties": {
+          "classify_requests": {
+            "type": "integer",
+            "title": "Classify Requests"
+          },
+          "rules": {
+            "type": "integer",
+            "title": "Rules"
+          },
+          "cache_hits": {
+            "type": "integer",
+            "title": "Cache Hits"
+          },
+          "ai_calls": {
+            "type": "integer",
+            "title": "Ai Calls"
+          },
+          "fallbacks": {
+            "type": "integer",
+            "title": "Fallbacks"
+          },
+          "cache_hit_rate": {
+            "type": "number",
+            "title": "Cache Hit Rate",
+            "description": "Share of requests that needed AI but were answered from cache"
+          },
+          "cached_pages": {
+            "type": "integer",
+            "title": "Cached Pages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "classify_requests",
+          "rules",
+          "cache_hits",
+          "ai_calls",
+          "fallbacks",
+          "cache_hit_rate",
+          "cached_pages"
+        ],
+        "title": "Stats"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

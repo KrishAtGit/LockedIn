@@ -19,6 +19,18 @@
         display: grid;
         gap: 10px;
       }
+      #verdict {
+        margin: 0;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+      }
+      #verdict[data-allowed='true'] {
+        border-color: var(--ok);
+      }
+      #verdict[data-allowed='false'] {
+        border-color: var(--over);
+      }
       .actions {
         display: flex;
         flex-wrap: wrap;
@@ -44,6 +56,7 @@
           <button type="submit" data-minutes="15" disabled>+15 min</button>
         </div>
         <span class="muted small" id="hint"></span>
+        <p id="verdict" role="status" hidden></p>
       </form>
 
       <div class="actions">

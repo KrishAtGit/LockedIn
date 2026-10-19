@@ -9,17 +9,18 @@ A study-aware focus extension for uni students. It knows a lecture from a rabbit
 **Working now**
 - Tracks active time per site. It only counts while you're actually using the browser, and audible tabs (lectures, videos) count too.
 - Default limit of 60 min per site per day, with custom limits per site and a study allowlist that's never limited.
+- Floating, draggable timer on each site showing time left today. It turns orange near the limit and can be minimised or turned off.
 - Warning notification before time runs out.
 - When the limit hits, the tab goes to a **"Need more time?"** page. You have to write a reason and wait, and the wait gets longer each time you ask.
 - Every reason is logged so you can look back at your excuses.
 
-**Backend (in progress, see [`backend/`](backend/README.md))**
-- FastAPI + Postgres service that labels pages as study / distraction / neutral: built-in rules first, then a cache, then a local Ollama model. No API keys or subscriptions.
-- Judges "need more time" reasons with the same local model.
-- Runs with one `docker compose up`.
+**With the AI backend (optional, see [`backend/`](backend/README.md))**
+- Each page is labelled study, distraction or neutral by a self-hosted FastAPI service: built-in rules first, then a cache, then a local Ollama model. No API keys or subscriptions.
+- Study pages don't count toward limits and are never blocked, so a YouTube lecture is fine and YouTube Shorts aren't.
+- Your reasons for more time are judged by the AI. Vague excuses get denied, and each denial makes the next wait longer.
+- If the backend is down, the extension falls back to working exactly as it does without it.
 
 **Planned**
-- Connect the extension to the backend, so a YouTube lecture counts as study and Shorts don't.
 - Deadline-adaptive limits from Canvas / Moodle / Google Calendar.
 - Deployed demo instance on AWS (Terraform).
 - Weekly insights report.
@@ -44,12 +45,19 @@ npm run build        # outputs dist/chrome and dist/firefox
 2. Click **Load Temporary Add-on** and pick `extension/dist/firefox/manifest.json`.
    (Temporary add-ons are removed when Firefox restarts. Signed builds will come with Releases.)
 
+## Turn on the AI (optional)
+
+1. Start the backend (see [`backend/README.md`](backend/README.md)), e.g. `docker compose up` from the repo root.
+2. In the extension, open **Settings → AI backend**, tick **Use the AI backend**, and allow access to the server when Chrome asks.
+3. **Test connection** should say *AI ready*.
+
 ## Development
 
 ```bash
 npm run dev          # rebuilds dist/chrome on every save
 npm run dev:firefox  # same for Firefox
 npm run typecheck
+npm run api:types    # regenerate TypeScript types from the backend's API after changing it
 ```
 
 After a rebuild, hit the reload icon on the extension card in `chrome://extensions`.
@@ -62,6 +70,7 @@ docker-compose.yml      # API + Postgres
 extension/
 ├── src/
 │   ├── background.ts   # time tracking, limit enforcement, grants
+│   ├── content/timer.ts  # the floating on-page timer (built separately, see vite.content.config.ts)
 │   ├── manifest.ts     # per-browser manifest (Chrome / Firefox)
 │   ├── lib/            # storage, domain matching, time helpers
 │   ├── pages/          # popup, options, and the "need more time?" page
@@ -71,7 +80,7 @@ extension/
 
 ## Privacy
 
-All tracking data stays in your browser (`storage.local`). Nothing is sent anywhere yet. Once the extension uses the backend, it will send only the domain, path and title of the current page to a server *you* run.
+All tracking data stays in your browser (`storage.local`). With the AI backend turned on (it's off by default), the domain, path and title of the page you're on, and any reasons you type for more time, are sent to the server you configured, which you run yourself. Nothing is sent anywhere else.
 
 ## License
 

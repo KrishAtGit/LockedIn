@@ -23,7 +23,8 @@ export default defineConfig({
   plugins: [manifest()],
   build: {
     outDir: resolve(import.meta.dirname, 'dist', target),
-    emptyOutDir: true,
+    // The content-script build writes into the same folder, so don't wipe it (npm run build cleans dist first).
+    emptyOutDir: false,
     // Extension pages run in modern browsers, so the modulepreload polyfill is dead weight.
     modulePreload: { polyfill: false },
     rollupOptions: {

@@ -1,3 +1,5 @@
+import browser from 'webextension-polyfill'
+import { api } from '../lib/api'
 import { domainOf } from '../lib/domain'
 import { getExcuses, getSettings, saveSettings, type Settings } from '../lib/storage'
 
@@ -6,6 +8,10 @@ const warnBefore = document.querySelector<HTMLInputElement>('#warn-before')!
 const allowlist = document.querySelector<HTMLTextAreaElement>('#allowlist')!
 const limitsBody = document.querySelector('#limits')!
 const saved = document.querySelector('#saved')!
+const showTimer = document.querySelector<HTMLInputElement>('#show-timer')!
+const backendEnabled = document.querySelector<HTMLInputElement>('#backend-enabled')!
+const backendUrl = document.querySelector<HTMLInputElement>('#backend-url')!
+const backendStatus = document.querySelector<HTMLElement>('#backend-status')!
 
 let settings: Settings
 
@@ -48,6 +54,30 @@ function renderLimits(): void {
   )
 }
 
+function setBackendStatus(text: string, ok?: boolean): void {
+  backendStatus.textContent = text
+  if (ok === undefined) delete backendStatus.dataset.ok
+  else backendStatus.dataset.ok = String(ok)
+}
+
+/** The extension may only talk to servers you've allowed, so ask for this one's address. */
+async function requestAccess(url: string): Promise<boolean> {
+  return browser.permissions.request({ origins: [`${new URL(url).origin}/*`] })
+}
+
+async function testBackend(): Promise<void> {
+  setBackendStatus('Checking…')
+  try {
+    const health = await api.health(settings.backend.url)
+    if (!health.database) setBackendStatus('Connected, but the server has no database.', false)
+    else if (health.ai === 'ready') setBackendStatus(`Connected. AI ready (${health.model}).`, true)
+    else if (health.ai === 'disabled') setBackendStatus('Connected. AI is turned off on the server, so only built-in rules apply.', true)
+    else setBackendStatus(`Connected, but the AI isn't ready. Is Ollama running with ${health.model} pulled?`, false)
+  } catch {
+    setBackendStatus(`Can't reach ${settings.backend.url}. Is the server running?`, false)
+  }
+}
+
 async function renderExcuses(): Promise<void> {
   const list = document.querySelector('#excuses')!
   const excuses = (await getExcuses()).slice(0, 20)
@@ -67,6 +97,12 @@ async function renderExcuses(): Promise<void> {
       const text = document.createElement('div')
       text.textContent = `"${e.reason}"`
       li.append(meta, text)
+      if (e.verdict) {
+        const reply = document.createElement('div')
+        reply.className = `small ${e.verdict}`
+        reply.textContent = `${e.verdict === 'allowed' ? 'Allowed' : 'Denied'}${e.reply ? `: ${e.reply}` : ''}`
+        li.append(reply)
+      }
       return li
     }),
   )
@@ -77,6 +113,9 @@ async function init(): Promise<void> {
   defaultLimit.value = String(settings.defaultLimitMin)
   warnBefore.value = String(settings.warnBeforeMin)
   allowlist.value = settings.allowlist.join('\n')
+  showTimer.checked = settings.showTimer
+  backendEnabled.checked = settings.backend.enabled
+  backendUrl.value = settings.backend.url
   renderLimits()
   await renderExcuses()
 
@@ -102,6 +141,47 @@ async function init(): Promise<void> {
     ]
     allowlist.value = settings.allowlist.join('\n')
     void save()
+  })
+
+  showTimer.addEventListener('change', () => {
+    settings.showTimer = showTimer.checked
+    void save()
+  })
+
+  backendEnabled.addEventListener('change', async () => {
+    if (backendEnabled.checked && !(await requestAccess(settings.backend.url))) {
+      backendEnabled.checked = false
+      setBackendStatus('LockedIn needs permission to talk to this server.', false)
+      return
+    }
+    settings.backend.enabled = backendEnabled.checked
+    await save()
+    if (backendEnabled.checked) await testBackend()
+    else setBackendStatus('')
+  })
+
+  backendUrl.addEventListener('change', async () => {
+    let url: URL
+    try {
+      url = new URL(backendUrl.value.trim())
+    } catch {
+      setBackendStatus('Enter a full address, like http://localhost:8000', false)
+      return
+    }
+    settings.backend.url = url.origin
+    backendUrl.value = url.origin
+    // A new server needs its own permission. If it's refused, switch the backend off rather than fail silently.
+    if (settings.backend.enabled && !(await requestAccess(url.origin))) {
+      settings.backend.enabled = false
+      backendEnabled.checked = false
+      setBackendStatus('LockedIn needs permission to talk to this server.', false)
+    }
+    await save()
+  })
+
+  document.querySelector('#backend-test')!.addEventListener('click', async () => {
+    if (await requestAccess(settings.backend.url)) await testBackend()
+    else setBackendStatus('LockedIn needs permission to talk to this server.', false)
   })
 
   document.querySelector('#add-limit')!.addEventListener('submit', (e) => {
