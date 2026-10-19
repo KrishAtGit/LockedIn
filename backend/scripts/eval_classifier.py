@@ -33,6 +33,12 @@ CASES = [
     ("mail.google.com", "/mail/u/0", "Inbox (12) - Gmail", "neutral"),
     ("commbank.com.au", "/netbank", "NetBank - Home", "neutral"),
     ("freecodecamp.org", "/news/sql-joins", "SQL Joins Explained with Examples", "study"),
+    # General-interest reading that looks "educational" but isn't study.
+    ("medium.com", "/@x/diwali", "How My Family Celebrates Diwali Every Year", "neutral"),
+    ("medium.com", "/@x/habits", "10 Morning Habits of Highly Successful People", "neutral"),
+    ("bbc.com", "/news/world-123", "Floods hit northern Italy after record rainfall", "neutral"),
+    ("quora.com", "/Who-would-win", "Who would win in a fight, Batman or Superman?", "distraction"),
+    ("quora.com", "/How-does-photosynthesis-work", "How does photosynthesis work?", "study"),
 ]
 
 

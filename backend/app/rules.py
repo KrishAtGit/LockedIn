@@ -36,6 +36,8 @@ DISTRACTION_DOMAINS = {
     "stan.com.au", "binge.com.au", "twitch.tv", "kick.com",
 }
 
+SEARCH_ENGINES = {"google.com", "google.com.au", "bing.com", "duckduckgo.com", "search.yahoo.com", "ecosia.org"}
+
 # University sites: anything.edu, anything.edu.au, anything.ac.uk and so on.
 UNIVERSITY_DOMAIN = re.compile(r"\.(edu|ac)(\.[a-z]{2})?$")
 
@@ -79,6 +81,10 @@ def classify(domain: str, path: str, title: str) -> Verdict | None:
         return Verdict("study", 0.95, "Known study site")
     if _matches(domain, DISTRACTION_DOMAINS):
         return Verdict("distraction", 0.95, "Known social or streaming site")
+
+    # Search result pages are just a step on the way somewhere, not something to judge.
+    if _matches(domain, SEARCH_ENGINES) and path.startswith("/search"):
+        return Verdict("neutral", 0.9, "Search results page")
 
     if _matches(domain, {"youtube.com", "youtu.be"}):
         if path.startswith("/shorts"):

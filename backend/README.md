@@ -50,8 +50,10 @@ To run with no AI at all, set `LOCKEDIN_AI_ENABLED=false`.
 
 ```bash
 uv run pytest                             # rules, cache, fallbacks and validation, with a fake model
-uv run python -m scripts.eval_classifier  # accuracy of the real model on 20 labelled pages
+uv run python -m scripts.eval_classifier  # accuracy of the real model on 25 labelled pages
 uv run python -m scripts.eval_classifier qwen2.5:7b   # compare another model
 ```
 
-Current result: `llama3.2:3b` labels **18/20 (90%)** of pages correctly with no help from rules, at a median **~500 ms** per page on an M-series Mac. The rules now catch both pages it missed.
+Current result: `llama3.2:3b` labels **24/25 (96%)** of pages correctly with no help from rules, at a median **~500 ms** per page on an M-series Mac.
+
+History: the first prompt scored 18/20. Adding general-interest pages (news, self-help, culture) to the set exposed a bias. The model called almost any readable page "study", dropping accuracy to 76%. Making the definition of study strict ("would this help a student pass a course?", and neutral when unsure) brought it to 96%.

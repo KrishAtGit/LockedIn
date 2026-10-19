@@ -8,7 +8,12 @@ pytestmark = pytest.mark.asyncio
 
 async def test_health(client: AsyncClient) -> None:
     body = (await client.get("/health")).json()
-    assert body == {"status": "ok", "database": True, "ai": "ready", "model": "fake-model"}
+    assert body == {
+        "status": "ok", 
+        "database": True, 
+        "ai": "ready", 
+        "model": "fake-model"
+        }
 
 
 async def test_rules_answer_without_calling_ai(client: AsyncClient, fake_ai: FakeAI) -> None:
@@ -24,7 +29,13 @@ async def test_ai_result_is_cached(client: AsyncClient, fake_ai: FakeAI) -> None
     # Same video, different notification count in the title: should still hit the cache.
     second = (await client.post("/classify", json={**page, "title": "(2) " + page["title"]})).json()
 
-    assert first == {"category": "study", "confidence": 0.9, "reason": "fake verdict", "source": "ai"}
+    assert first == {
+        "category": "study", 
+        "confidence": 0.9, 
+        "reason": "fake verdict", 
+        "source": "ai"
+        }
+    
     assert second["source"] == "cache"
     assert second["category"] == "study"
     assert fake_ai.classify_calls == 1
