@@ -7,7 +7,7 @@ const defaultLimit = document.querySelector<HTMLInputElement>('#default-limit')!
 const warnBefore = document.querySelector<HTMLInputElement>('#warn-before')!
 const allowlist = document.querySelector<HTMLTextAreaElement>('#allowlist')!
 const limitsBody = document.querySelector('#limits')!
-const saved = document.querySelector('#saved')!
+const saved = document.querySelector<HTMLElement>('#saved')!
 const showTimer = document.querySelector<HTMLInputElement>('#show-timer')!
 const backendEnabled = document.querySelector<HTMLInputElement>('#backend-enabled')!
 const backendUrl = document.querySelector<HTMLInputElement>('#backend-url')!
@@ -24,8 +24,8 @@ function normalizeDomain(input: string): string | null {
 
 async function save(): Promise<void> {
   await saveSettings(settings)
-  saved.textContent = 'Saved'
-  setTimeout(() => (saved.textContent = ''), 1500)
+  saved.dataset.show = 'true'
+  setTimeout(() => (saved.dataset.show = 'false'), 1500)
 }
 
 function renderLimits(): void {
@@ -37,11 +37,13 @@ function renderLimits(): void {
         const name = document.createElement('td')
         name.textContent = domain
         const value = document.createElement('td')
-        value.className = 'muted'
+        value.className = 'num'
         value.textContent = `${minutes} min/day`
         const actions = document.createElement('td')
         const remove = document.createElement('button')
+        remove.className = 'ghost'
         remove.textContent = 'Remove'
+        remove.setAttribute('aria-label', `Remove the limit for ${domain}`)
         remove.addEventListener('click', () => {
           delete settings.limits[domain]
           renderLimits()
@@ -91,15 +93,16 @@ async function renderExcuses(): Promise<void> {
   list.replaceChildren(
     ...excuses.map((e) => {
       const li = document.createElement('li')
+      li.className = e.verdict ?? 'allowed'
       const meta = document.createElement('div')
-      meta.className = 'muted small'
+      meta.className = 'eyebrow'
       meta.textContent = `${new Date(e.ts).toLocaleString()} · ${e.domain} · +${e.minutes} min`
       const text = document.createElement('div')
       text.textContent = `"${e.reason}"`
       li.append(meta, text)
       if (e.verdict) {
         const reply = document.createElement('div')
-        reply.className = `small ${e.verdict}`
+        reply.className = 'small reply'
         reply.textContent = `${e.verdict === 'allowed' ? 'Allowed' : 'Denied'}${e.reply ? `: ${e.reply}` : ''}`
         li.append(reply)
       }

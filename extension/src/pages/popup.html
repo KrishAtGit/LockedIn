@@ -6,59 +6,178 @@
     <link rel="stylesheet" href="./style.css" />
     <style>
       body {
-        width: 340px;
-        padding: 16px;
+        width: 320px;
       }
       header {
         display: flex;
-        justify-content: space-between;
-        align-items: baseline;
-        margin-bottom: 12px;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 10px 4px 16px;
+      }
+      header img {
+        width: 18px;
+        height: 18px;
+        border-radius: 4px;
+      }
+      .brand {
+        font-weight: 650;
+        letter-spacing: -0.01em;
+      }
+      #date {
+        margin-left: auto;
+      }
+      header button {
+        display: grid;
+        place-items: center;
+        padding: 5px;
+      }
+
+      /* The site in this tab, shown as a timer dial. */
+      #now {
+        display: grid;
+        justify-items: center;
+        gap: 10px;
+        padding: 8px 16px 18px;
+      }
+      .dial {
+        position: relative;
+        width: 176px;
+        height: 176px;
+      }
+      .dial-center {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        text-align: center;
+      }
+      #now-time {
+        font-size: 34px;
+        color: var(--state);
+      }
+      #now-time.word {
+        font-size: 24px;
+        font-weight: 400;
+        letter-spacing: -0.01em;
+      }
+      .now-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        max-width: 100%;
+      }
+      #now-site {
+        font-size: 15px;
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #now-detail {
+        margin-top: -4px;
+      }
+
+      .totals {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        margin: 0 16px;
+        padding: 14px 0;
+        border-top: 1px solid var(--line);
+      }
+      .totals > div {
+        display: grid;
+        gap: 4px;
+      }
+      .totals .readout {
+        font-size: 24px;
+      }
+      #total-study {
+        color: var(--study);
+      }
+
+      .sites {
+        margin: 0 16px;
+        padding: 14px 0 16px;
+        border-top: 1px solid var(--line);
+        display: grid;
+        gap: 12px;
       }
       ul {
         list-style: none;
         margin: 0;
         padding: 0;
         display: grid;
-        gap: 12px;
+        gap: 10px;
       }
-      .row {
-        display: flex;
-        justify-content: space-between;
-        gap: 8px;
-        margin-bottom: 4px;
+      li {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 72px 64px;
+        align-items: center;
+        gap: 12px;
       }
       .domain {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      #current {
-        margin: 0 0 12px;
-        padding: 8px 10px;
-        border-radius: 8px;
-        background: var(--surface);
+      li .num {
+        font-size: 12px;
+        text-align: right;
+        color: var(--state);
       }
-      #current[data-state='offline'] {
-        color: var(--warn);
-      }
-      .tag {
-        font-size: 11px;
-        color: var(--ok);
+      li.study .segments {
+        --state: var(--study);
       }
     </style>
   </head>
   <body>
     <header>
-      <div>
-        <h1>Today</h1>
-        <span class="muted small" id="total"></span>
-      </div>
-      <a href="#" id="open-options" class="small">Settings</a>
+      <img src="/icons/icon-32.png" alt="" />
+      <span class="brand">LockedIn</span>
+      <span class="eyebrow" id="date"></span>
+      <button class="ghost" id="open-options" aria-label="Settings" title="Settings">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" />
+          <circle cx="9" cy="6" r="2" fill="var(--bg)" /><circle cx="15" cy="12" r="2" fill="var(--bg)" /><circle cx="7" cy="18" r="2" fill="var(--bg)" />
+        </svg>
+      </button>
     </header>
-    <p class="small" id="current" hidden></p>
-    <ul id="list"></ul>
-    <p class="muted small" id="empty" hidden>Nothing tracked yet today. Go do something!</p>
+
+    <section id="now" hidden>
+      <div class="dial">
+        <div id="now-ring"></div>
+        <div class="dial-center">
+          <span class="readout" id="now-time"></span>
+          <span class="eyebrow" id="now-sub"></span>
+        </div>
+      </div>
+      <div class="now-meta">
+        <span id="now-site"></span>
+        <span class="chip" id="now-chip" hidden></span>
+      </div>
+      <p class="muted small" id="now-detail"></p>
+    </section>
+
+    <section class="totals">
+      <div>
+        <span class="readout" id="total-counted">0m</span>
+        <span class="eyebrow">Counted today</span>
+      </div>
+      <div>
+        <span class="readout" id="total-study">0m</span>
+        <span class="eyebrow">Studying</span>
+      </div>
+    </section>
+
+    <section class="sites">
+      <span class="eyebrow">Sites today</span>
+      <ul id="list"></ul>
+      <p class="muted small" id="empty" hidden>Nothing tracked yet today.</p>
+    </section>
+
     <script type="module" src="./popup.ts"></script>
   </body>
 </html>

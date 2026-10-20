@@ -19,7 +19,7 @@ import {
   usedMs,
   type Excuse,
 } from './lib/storage'
-import type { TimerStatus } from './lib/status'
+import type { SiteStatus, TimerStatus } from './lib/status'
 import { MINUTE, formatDuration, today } from './lib/time'
 
 /** The tab currently being timed. Kept in session storage because the service worker can be killed at any time. */
@@ -200,18 +200,33 @@ async function enforce(target: Target): Promise<boolean> {
 function tick(): Promise<void> {
   return serial(async () => {
     const now = Date.now()
+    const before = await getSession()
     await commit(now)
 
     const target = await currentTarget()
     if (target) void classify(target.page)
-    if (target && (await enforce(target))) {
-      await setSession(null)
-      return
+    const blocked = target !== null && (await enforce(target))
+    const after: Session | null =
+      target && !blocked
+        ? { domain: target.page.domain, pageKey: target.page.key, tabId: target.tabId, start: now }
+        : null
+    await setSession(after)
+    if (before?.tabId !== after?.tabId || before?.pageKey !== after?.pageKey) {
+      notifyTimers(before?.tabId, after?.tabId)
     }
-    await setSession(
-      target ? { domain: target.page.domain, pageKey: target.page.key, tabId: target.tabId, start: now } : null,
-    )
   })
+}
+
+/**
+ * Tells the floating timers in these tabs to fetch their status again, because timing just started or stopped
+ * there. Without this, a timer that asked a moment too early would think it's paused until its next poll.
+ */
+function notifyTimers(...tabIds: (number | undefined)[]): void {
+  for (const tabId of new Set(tabIds)) {
+    if (tabId === undefined) continue
+    // Tabs without the timer (browser pages, the blocked page) have nothing listening, which is fine.
+    browser.tabs.sendMessage(tabId, { type: 'timer-refresh' }).catch(() => {})
+  }
 }
 
 function logExcuse(excuse: Excuse, grantMinutes: number): Promise<void> {
@@ -249,11 +264,11 @@ browser.tabs.onUpdated.addListener((_id, change) => {
 browser.windows.onFocusChanged.addListener(() => void tick())
 browser.idle.onStateChanged.addListener(() => void tick())
 
-/** Live time used and left on the site in `tab`, for the floating timer. Includes the session not yet committed. */
-async function timerStatus(tab: browser.Tabs.Tab | undefined): Promise<TimerStatus> {
+/** Live time used and left on the site in `tab`, including the session not yet committed. Null for non-web pages. */
+async function siteStatus(tab: browser.Tabs.Tab | undefined): Promise<SiteStatus | null> {
   const settings = await getSettings()
   const page = pageInfo(tab?.url, tab?.title)
-  if (!settings.showTimer || !page || isAllowlisted(settings, page.domain)) return { show: false }
+  if (!page) return null
 
   const day = today()
   const key = limitKey(settings, page.domain)
@@ -266,15 +281,23 @@ async function timerStatus(tab: browser.Tabs.Tab | undefined): Promise<TimerStat
   if (counting && !study) usedMsToday += Math.min(Date.now() - session!.start, MAX_COMMIT_GAP)
 
   return {
-    show: true,
     site: key,
     usedMs: usedMsToday,
     limitMs: baseLimitMs(settings, key) + ((await getDaily('grants'))[day]?.[key] ?? 0),
+    warnMs: settings.warnBeforeMin * MINUTE,
     counting,
     exempt: study ? 'study-page' : null,
+    allowlisted: isAllowlisted(settings, page.domain),
     category: verdict?.category ?? null,
     ai: await aiState(settings.backend.enabled, page, verdict),
   }
+}
+
+/** The floating timer is hidden when it's switched off, and on study sites where nothing is counted. */
+async function timerStatus(tab: browser.Tabs.Tab | undefined): Promise<TimerStatus> {
+  const status = await siteStatus(tab)
+  if (!status || status.allowlisted || !(await getSettings()).showTimer) return { show: false }
+  return { show: true, ...status }
 }
 
 type Message =
@@ -282,10 +305,13 @@ type Message =
   | { type: 'excuse'; key: string; minutes: number; reason: string; verdict: 'allowed' | 'denied'; reply?: string }
   /** Sent by the floating timer on a web page. */
   | { type: 'timer-status' }
+  /** Sent by the popup, about the tab it was opened over. */
+  | { type: 'site-status'; tabId: number }
 
 browser.runtime.onMessage.addListener((message: unknown, sender: browser.Runtime.MessageSender) => {
   const msg = message as Message
   if (msg.type === 'timer-status') return timerStatus(sender.tab)
+  if (msg.type === 'site-status') return browser.tabs.get(msg.tabId).then(siteStatus)
   if (msg.type !== 'excuse') return undefined
   const excuse: Excuse = {
     ts: Date.now(),

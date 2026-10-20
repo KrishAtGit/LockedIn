@@ -6,62 +6,138 @@
     <link rel="stylesheet" href="./style.css" />
     <style>
       main {
-        max-width: 520px;
-        margin: 10vh auto;
-        padding: 0 16px;
+        max-width: 560px;
+        margin: 0 auto;
+        padding: 12vh 16px 48px;
         display: grid;
-        gap: 16px;
+        gap: 28px;
       }
-      h1 {
+      .hero {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        align-items: center;
+        gap: 28px;
+      }
+      .gauge {
+        position: relative;
+        width: 176px;
+        height: 176px;
+      }
+      .gauge-center {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        text-align: center;
+      }
+      .gauge-center .readout {
+        font-size: 38px;
+        color: var(--over);
+      }
+      .hero .ring-track {
+        stroke: color-mix(in srgb, var(--over) 22%, transparent);
+      }
+      .hero .tick-major {
+        stroke: var(--over);
+      }
+      .hero h1 {
         font-size: 26px;
+        margin: 8px 0 8px;
+        overflow-wrap: anywhere;
       }
+      @media (max-width: 480px) {
+        .hero {
+          grid-template-columns: 1fr;
+          justify-items: start;
+        }
+      }
+
       form {
         display: grid;
-        gap: 10px;
+        gap: 12px;
       }
-      #verdict {
-        margin: 0;
-        padding: 10px 12px;
-        border-radius: 8px;
-        border: 1px solid var(--border);
+      .form-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
       }
-      #verdict[data-allowed='true'] {
-        border-color: var(--ok);
-      }
-      #verdict[data-allowed='false'] {
-        border-color: var(--over);
+      #count[data-ready='true'] {
+        color: var(--study);
       }
       .actions {
         display: flex;
         flex-wrap: wrap;
+        align-items: center;
         gap: 8px;
+      }
+      #hint {
+        margin-left: 4px;
+      }
+      #verdict {
+        padding: 12px 14px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        border-left: 3px solid var(--state, var(--line));
+        background: var(--bg);
+        display: grid;
+        gap: 6px;
+      }
+      #verdict[data-allowed='true'] {
+        --state: var(--study);
+      }
+      #verdict[data-allowed='false'] {
+        --state: var(--over);
+      }
+      #verdict .eyebrow {
+        color: var(--state);
+      }
+      #close {
+        justify-self: start;
       }
     </style>
   </head>
   <body>
     <main>
-      <div>
-        <h1 id="title">Time's up</h1>
-        <p class="muted" id="summary"></p>
+      <div class="hero over">
+        <div class="gauge">
+          <div id="ring"></div>
+          <div class="gauge-center">
+            <span class="readout">0:00</span>
+            <span class="eyebrow">left today</span>
+          </div>
+        </div>
+        <div>
+          <span class="eyebrow">Limit reached</span>
+          <h1 id="title">Time's up</h1>
+          <p class="muted" id="summary"></p>
+        </div>
       </div>
 
       <form class="card" id="negotiate">
-        <h2>Need more time?</h2>
-        <p class="muted small" style="margin: 0">
-          Say what you're doing. Be honest, because you'll see these reasons in your weekly report.
+        <div class="form-head">
+          <h2>Need more time?</h2>
+          <span class="eyebrow" id="count"></span>
+        </div>
+        <p class="muted small">
+          Say what you're doing. Be honest, because you'll see these reasons again in your weekly report.
         </p>
         <textarea id="reason" rows="3" placeholder="e.g. Finishing the last 10 minutes of the week 6 lecture"></textarea>
         <div class="actions">
           <button type="submit" class="primary" data-minutes="5" disabled>+5 min</button>
           <button type="submit" data-minutes="15" disabled>+15 min</button>
+          <span class="muted small" id="hint" role="status"></span>
         </div>
-        <span class="muted small" id="hint"></span>
-        <p id="verdict" role="status" hidden></p>
+        <div id="verdict" role="status" hidden>
+          <span class="eyebrow" id="verdict-title"></span>
+          <p id="verdict-text"></p>
+        </div>
       </form>
 
-      <div class="actions">
-        <button id="close">Close this tab</button>
-      </div>
+      <button class="ghost" id="close">Close this tab</button>
     </main>
     <script type="module" src="./blocked.ts"></script>
   </body>

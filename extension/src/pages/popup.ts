@@ -1,4 +1,7 @@
 import browser from 'webextension-polyfill'
+import { aiLabel } from '../lib/labels'
+import { clock, fractionLeft, limitState, ringSvg, segmentsHtml } from '../lib/ring'
+import type { SiteStatus } from '../lib/status'
 import {
   baseLimitMs,
   getDaily,
@@ -8,14 +11,17 @@ import {
   limitKey,
   usedMs,
 } from '../lib/storage'
-import { aiState, getVerdict, pageInfo } from '../lib/pages'
-import { formatDuration, today } from '../lib/time'
+import { MINUTE, formatDuration, today } from '../lib/time'
 
-async function render(): Promise<void> {
+const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!
+
+/** Today's totals and one row per site. */
+async function renderToday(): Promise<void> {
   const settings = await getSettings()
   const usage = await getTodayUsage()
   const grants = (await getDaily('grants'))[today()] ?? {}
   const study = Object.values((await getDaily('study'))[today()] ?? {}).reduce((a, b) => a + b, 0)
+  const warnMs = settings.warnBeforeMin * MINUTE
 
   // Group domains under their limit key so youtube.com and m.youtube.com show as one row.
   const keys = [...new Set(Object.keys(usage).map((d) => limitKey(settings, d)))]
@@ -28,78 +34,90 @@ async function render(): Promise<void> {
     }))
     .sort((a, b) => b.used - a.used)
 
-  const total = rows.reduce((sum, r) => sum + r.used, 0)
-  document.querySelector('#total')!.textContent =
-    study > 0 ? `${formatDuration(total)} counted · ${formatDuration(study)} studying` : `${formatDuration(total)} in the browser`
-  document.querySelector<HTMLElement>('#empty')!.hidden = rows.length > 0
+  $('#total-counted').textContent = formatDuration(rows.filter((r) => !r.allowed).reduce((s, r) => s + r.used, 0))
+  $('#total-study').textContent = formatDuration(study + rows.filter((r) => r.allowed).reduce((s, r) => s + r.used, 0))
+  $('#empty').hidden = rows.length > 0
 
-  const list = document.querySelector('#list')!
-  list.replaceChildren(
+  $('#list').replaceChildren(
     ...rows.map(({ key, used, limit, allowed }) => {
       const li = document.createElement('li')
-      const ratio = allowed ? 0 : Math.min(used / limit, 1)
-      const state = ratio >= 1 ? 'over' : ratio >= 0.8 ? 'warn' : ''
+      li.className = allowed ? 'study' : limitState(used, limit, warnMs)
+      li.title = allowed ? `${key} is on your study list, so it's never limited` : `${key}: ${formatDuration(used)} of ${formatDuration(limit)}`
 
-      const row = document.createElement('div')
-      row.className = 'row'
       const name = document.createElement('span')
       name.className = 'domain'
       name.textContent = key
+      const bar = document.createElement('span')
+      // Study sites have no limit, so their bar is shown full in the study colour.
+      bar.innerHTML = segmentsHtml(allowed ? 1 : used / limit)
       const value = document.createElement('span')
-      value.className = 'muted small'
-      value.textContent = allowed
-        ? formatDuration(used)
-        : `${formatDuration(used)} / ${formatDuration(limit)}`
-      row.append(name, value)
-      li.append(row)
-
-      if (allowed) {
-        const tag = document.createElement('span')
-        tag.className = 'tag'
-        tag.textContent = 'Study, no limit'
-        li.append(tag)
-      } else {
-        const bar = document.createElement('div')
-        bar.className = `bar ${state}`
-        const fill = document.createElement('span')
-        fill.style.width = `${ratio * 100}%`
-        bar.append(fill)
-        li.append(bar)
-      }
+      value.className = 'num'
+      value.textContent = allowed ? formatDuration(used) : `${formatDuration(used)}/${formatDuration(limit)}`
+      li.append(name, bar, value)
       return li
     }),
   )
 }
 
-const VERDICT_TEXT = {
-  study: 'Study page: doesn’t count toward your limit',
-  distraction: 'Distraction: counts toward your limit',
-  neutral: 'Counts toward your limit as usual',
+/** The ring for the site in the current tab. */
+function renderNow(status: SiteStatus): void {
+  const section = $('#now')
+  const free = status.allowlisted || status.exempt !== null
+  const left = status.limitMs - status.usedMs
+  const state = free ? 'study' : limitState(status.usedMs, status.limitMs, status.warnMs)
+  const category = status.allowlisted ? 'study' : status.category
+  section.className = category ? `${state} cat-${category}` : state
+  section.hidden = false
+
+  $('#now-ring').innerHTML = ringSvg(free ? 1 : fractionLeft(status.usedMs, status.limitMs), { size: 176, stroke: 6 })
+  // Words ("Study", "Free") are set smaller than the countdown so they always fit inside the ring.
+  $('#now-time').classList.toggle('word', free)
+  $('#now-site').textContent = status.site
+  $('#now-site').title = status.site
+
+  if (status.allowlisted) {
+    $('#now-time').textContent = 'Free'
+    $('#now-sub').textContent = 'study site'
+    $('#now-detail').textContent = 'On your study list, so it’s never limited.'
+  } else if (status.exempt) {
+    $('#now-time').textContent = 'Study'
+    $('#now-sub').textContent = 'not counting'
+    $('#now-detail').textContent = `${formatDuration(status.usedMs)} of ${formatDuration(status.limitMs)} used today`
+  } else {
+    $('#now-time').textContent = clock(left)
+    $('#now-sub').textContent = left > 0 ? 'left' : 'time’s up'
+    $('#now-detail').textContent = `${formatDuration(status.usedMs)} of ${formatDuration(status.limitMs)} used today`
+  }
+
+  const label = status.allowlisted ? null : aiLabel(status.ai, status.category)
+  const chip = $('#now-chip')
+  chip.hidden = !label
+  if (label) {
+    chip.className = `chip ${label.kind}`
+    chip.textContent = label.text
+    chip.title = label.detail
+  }
 }
 
-/** Shows how the AI labelled the page you're on, if the backend has seen it. */
-async function renderCurrentPage(): Promise<void> {
+async function init(): Promise<void> {
+  $('#date').textContent = new Date().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
+  void renderToday()
+
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
-  const page = pageInfo(tab?.url, tab?.title)
-  if (!page) return
-  const verdict = await getVerdict(page.key)
-  const state = await aiState((await getSettings()).backend.enabled, page, verdict)
-  const el = document.querySelector<HTMLElement>('#current')!
-  if (state === 'off') return
-  el.textContent =
-    state === 'labelled'
-      ? `${VERDICT_TEXT[verdict!.category]} (${verdict!.reason.toLowerCase()})`
-      : state === 'checking'
-        ? 'The AI is labelling this page…'
-        : 'AI offline: start the backend and Ollama to label pages. Time counts as usual.'
-  el.dataset.state = state
-  el.hidden = false
+  if (tab?.id === undefined) return
+  const status = (await browser.runtime.sendMessage({ type: 'site-status', tabId: tab.id })) as SiteStatus | null
+  if (!status) return
+  renderNow(status)
+
+  // Keep counting down while the popup is open.
+  if (status.counting && !status.exempt && !status.allowlisted) {
+    setInterval(() => {
+      status.usedMs += 1000
+      renderNow(status)
+    }, 1000)
+  }
 }
 
-document.querySelector('#open-options')!.addEventListener('click', (e) => {
-  e.preventDefault()
-  void browser.runtime.openOptionsPage()
-})
+$('#open-options').addEventListener('click', () => void browser.runtime.openOptionsPage())
 
-void render()
-void renderCurrentPage()
+void init()

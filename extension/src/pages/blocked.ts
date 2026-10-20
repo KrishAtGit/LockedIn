@@ -1,6 +1,7 @@
 import browser from 'webextension-polyfill'
 import { api } from '../lib/api'
 import { domainOf } from '../lib/domain'
+import { ringSvg } from '../lib/ring'
 import { baseLimitMs, getExcuses, getSettings, getTodayUsage, usedMs } from '../lib/storage'
 import { MINUTE, formatDuration, today } from '../lib/time'
 
@@ -17,6 +18,7 @@ const returnUrl = params.get('url') ?? ''
 const reason = document.querySelector<HTMLTextAreaElement>('#reason')!
 const hint = document.querySelector('#hint')!
 const verdict = document.querySelector<HTMLElement>('#verdict')!
+const count = document.querySelector<HTMLElement>('#count')!
 const buttons = [...document.querySelectorAll<HTMLButtonElement>('#negotiate button')]
 
 let secondsLeft = 0
@@ -28,6 +30,9 @@ function updateButtons(): void {
   const longEnough = reason.value.trim().length >= MIN_REASON_LENGTH
   const ready = secondsLeft <= 0 && longEnough && !checking
   buttons.forEach((b) => (b.disabled = !ready))
+  const length = reason.value.trim().length
+  count.textContent = `${Math.min(length, MIN_REASON_LENGTH)} / ${MIN_REASON_LENGTH}`
+  count.dataset.ready = String(longEnough)
 
   if (checking) hint.textContent = 'Checking your reason…'
   else if (secondsLeft > 0) hint.textContent = `Take a breath. You can ask in ${secondsLeft}s.`
@@ -48,7 +53,8 @@ function startCountdown(): void {
 }
 
 function showVerdict(text: string, allowed: boolean): void {
-  verdict.textContent = text
+  document.querySelector('#verdict-title')!.textContent = allowed ? 'Allowed · going back' : 'Not this time'
+  document.querySelector('#verdict-text')!.textContent = text
   verdict.dataset.allowed = String(allowed)
   verdict.hidden = false
 }
@@ -60,6 +66,7 @@ function goBack(): void {
 }
 
 async function init(): Promise<void> {
+  document.querySelector('#ring')!.innerHTML = ringSvg(0, { size: 176, stroke: 6 })
   const settings = await getSettings()
   const used = usedMs(await getTodayUsage(), key)
   asksToday = (await getExcuses()).filter((e) => e.domain === key && today(e.ts) === today()).length

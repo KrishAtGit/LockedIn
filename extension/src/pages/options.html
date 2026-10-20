@@ -6,140 +6,212 @@
     <link rel="stylesheet" href="./style.css" />
     <style>
       main {
-        max-width: 640px;
-        margin: 32px auto;
-        padding: 0 16px;
+        max-width: 680px;
+        margin: 0 auto;
+        padding: 40px 16px 64px;
         display: grid;
-        gap: 16px;
+        gap: 14px;
       }
-      label {
+      .page-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 10px;
+      }
+      .page-head img {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+      }
+      .page-head p {
+        margin-top: 4px;
+      }
+      #saved {
+        margin-left: auto;
+        color: var(--study);
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+      #saved[data-show='true'] {
+        opacity: 1;
+      }
+
+      .card {
         display: grid;
-        gap: 4px;
+        gap: 14px;
       }
-      .grid {
+      .card-head {
+        display: grid;
+        gap: 6px;
+      }
+      label.field {
+        display: grid;
+        gap: 6px;
+        font-size: 13px;
+      }
+      .fields {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
         gap: 12px;
       }
-      .card {
-        display: grid;
-        gap: 12px;
+      .field input[type='number'] {
+        width: 100%;
       }
       .add {
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
       }
-      .add input[type='text'] {
+      .add input[type='text'],
+      .add input[type='url'] {
         flex: 1;
         min-width: 160px;
       }
+      .add input[type='number'] {
+        width: 110px;
+      }
+
       table {
         width: 100%;
         border-collapse: collapse;
       }
       td {
-        padding: 6px 0;
-        border-top: 1px solid var(--border);
+        padding: 8px 0;
+        border-top: 1px solid var(--line);
+        vertical-align: middle;
+      }
+      td.num {
+        color: var(--muted);
+        font-size: 13px;
+        white-space: nowrap;
+        padding: 8px 12px;
       }
       td:last-child {
         text-align: right;
+        width: 1%;
       }
+      #limits:empty::after {
+        content: 'No site limits yet. Every site gets the default limit.';
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      #backend-status[data-ok='true'] {
+        color: var(--study);
+      }
+      #backend-status[data-ok='false'] {
+        color: var(--over);
+      }
+
       #excuses {
         list-style: none;
         margin: 0;
         padding: 0;
         display: grid;
-        gap: 8px;
+        gap: 10px;
       }
-      .toggle {
-        display: flex;
-        align-items: center;
-        gap: 8px;
+      #excuses li {
+        display: grid;
+        gap: 4px;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-left: 3px solid var(--state, var(--line));
+        border-radius: 8px;
       }
-      #backend-status[data-ok='true'],
-      .allowed {
-        color: var(--ok);
+      #excuses li.allowed {
+        --state: var(--study);
       }
-      #backend-status[data-ok='false'],
-      .denied {
-        color: var(--over);
+      #excuses li.denied {
+        --state: var(--over);
       }
-      #saved {
-        color: var(--ok);
+      #excuses .reply {
+        color: var(--state);
       }
     </style>
   </head>
   <body>
     <main>
-      <div>
-        <h1>LockedIn settings</h1>
-        <p class="muted small" style="margin: 0">Limits reset at midnight. Changes save automatically.</p>
+      <div class="page-head">
+        <img src="/icons/icon-128.png" alt="" />
+        <div>
+          <h1>Settings</h1>
+          <p class="muted small">Limits reset at midnight. Changes save automatically.</p>
+        </div>
+        <span class="small" id="saved" role="status">Saved</span>
       </div>
 
       <section class="card">
-        <h2>General</h2>
-        <div class="grid">
-          <label>
+        <div class="card-head">
+          <span class="eyebrow">Limits</span>
+          <h2>Daily time per site</h2>
+        </div>
+        <div class="fields">
+          <label class="field">
             Default limit per site (minutes)
             <input type="number" id="default-limit" min="1" max="1440" />
           </label>
-          <label>
-            Warn me before (minutes)
+          <label class="field">
+            Warn me when this much is left (minutes)
             <input type="number" id="warn-before" min="0" max="60" />
           </label>
         </div>
-        <label class="toggle">
+        <label class="switch">
           <input type="checkbox" id="show-timer" />
           Show a floating timer on websites
         </label>
       </section>
 
       <section class="card">
-        <h2>Site limits</h2>
+        <div class="card-head">
+          <span class="eyebrow">Overrides</span>
+          <h2>Site limits</h2>
+          <p class="muted small">A different limit for particular sites. Subdomains share it.</p>
+        </div>
         <form class="add" id="add-limit">
-          <input type="text" id="limit-domain" placeholder="youtube.com" required />
-          <input type="number" id="limit-minutes" placeholder="minutes" min="1" max="1440" required />
-          <button type="submit">Add</button>
+          <input type="text" id="limit-domain" placeholder="youtube.com" aria-label="Site" required />
+          <input type="number" id="limit-minutes" placeholder="min" min="1" max="1440" aria-label="Minutes per day" required />
+          <button type="submit">Add limit</button>
         </form>
         <table><tbody id="limits"></tbody></table>
       </section>
 
       <section class="card">
-        <h2>Study sites (never limited)</h2>
-        <label>
-          <span class="muted small">One domain per line. Subdomains are included.</span>
-          <textarea id="allowlist" rows="5"></textarea>
-        </label>
+        <div class="card-head">
+          <span class="eyebrow">Never limited</span>
+          <h2>Study sites</h2>
+          <p class="muted small">One domain per line. Subdomains are included.</p>
+        </div>
+        <textarea id="allowlist" rows="5" class="num" aria-label="Study sites"></textarea>
       </section>
 
       <section class="card">
-        <h2>AI backend</h2>
-        <p class="muted small" style="margin: 0">
-          Lets LockedIn tell a lecture from a rabbit hole: study pages stop counting toward your limits, and your
-          reasons for more time get checked. When this is on, the address and title of the page you're on are sent to
-          the server below, which you run yourself. See the backend README to set it up.
-        </p>
-        <label class="toggle">
+        <div class="card-head">
+          <span class="eyebrow">Self-hosted AI</span>
+          <h2>AI backend</h2>
+          <p class="muted small">
+            Tells a lecture from a rabbit hole: study pages stop counting toward your limits, and your reasons for
+            more time get checked. When this is on, the address and title of the page you're on are sent to the server
+            below, which you run yourself. See the backend README to set it up.
+          </p>
+        </div>
+        <label class="switch">
           <input type="checkbox" id="backend-enabled" />
           Use the AI backend
         </label>
-        <label>
-          Server address
-          <input type="url" id="backend-url" placeholder="http://localhost:8000" />
-        </label>
         <div class="add">
+          <input type="url" id="backend-url" placeholder="http://localhost:8000" aria-label="Server address" />
           <button type="button" id="backend-test">Test connection</button>
-          <span class="small" id="backend-status" role="status"></span>
         </div>
+        <span class="small" id="backend-status" role="status"></span>
       </section>
 
       <section class="card">
-        <h2>Your reasons for more time</h2>
+        <div class="card-head">
+          <span class="eyebrow">Log</span>
+          <h2>Your reasons for more time</h2>
+        </div>
         <ul id="excuses"></ul>
       </section>
-
-      <span class="small" id="saved"></span>
     </main>
     <script type="module" src="./options.ts"></script>
   </body>

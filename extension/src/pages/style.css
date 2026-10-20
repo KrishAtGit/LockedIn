@@ -1,26 +1,48 @@
+/*
+ * LockedIn: "focus instrument". Greyscale like the logo; colour only ever means a state.
+ *   study (teal)  · warn (amber, inside the "warn me before" window) · over (red, limit reached)
+ * Numbers are monospace with tabular figures so countdowns don't jitter.
+ */
 :root {
-  --bg: #ffffff;
-  --surface: #f4f4f6;
-  --text: #17171c;
-  --muted: #6b6b76;
-  --border: #e2e2e8;
-  --accent: #4f46e5;
-  --accent-text: #ffffff;
-  --ok: #16a34a;
-  --warn: #d97706;
-  --over: #dc2626;
+  --bg: #f4f4f1;
+  --surface: #ffffff;
+  --raised: #ebebe7;
+  --line: #dcdcd6;
+  --text: #141518;
+  --muted: #6c6e74;
+  --ring-track: #e4e4de;
+  --ring-tick: #b9bab4;
+  --ring-tick-major: #141518;
+  --invert-bg: #141518;
+  --invert-text: #f4f4f1;
+  --study: #0f8f7e;
+  --warn: #b86e00;
+  --over: #c8352c;
+  --focus: #141518;
+
+  --sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  --radius: 10px;
   color-scheme: light dark;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #131317;
-    --surface: #1d1d23;
-    --text: #ececf1;
-    --muted: #9a9aa6;
-    --border: #2c2c35;
-    --accent: #818cf8;
-    --accent-text: #0e0e12;
+    --bg: #0e0f11;
+    --surface: #16171a;
+    --raised: #1f2024;
+    --line: #2b2d32;
+    --text: #e8e6e1;
+    --muted: #8c8f96;
+    --ring-track: #24262b;
+    --ring-tick: #3a3d43;
+    --ring-tick-major: #8c8f96;
+    --invert-bg: #e8e6e1;
+    --invert-text: #0e0f11;
+    --study: #4fd1bb;
+    --warn: #f0a63a;
+    --over: #f0645a;
+    --focus: #e8e6e1;
   }
 }
 
@@ -32,21 +54,38 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 14px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font: 14px/1.5 var(--sans);
+  -webkit-font-smoothing: antialiased;
 }
 
 h1,
 h2 {
-  margin: 0 0 4px;
+  margin: 0;
   line-height: 1.2;
+  letter-spacing: -0.01em;
 }
 
 h1 {
-  font-size: 18px;
+  font-size: 20px;
+  font-weight: 650;
 }
 
 h2 {
   font-size: 15px;
+  font-weight: 600;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 
 .muted {
@@ -57,35 +96,93 @@ h2 {
   font-size: 12px;
 }
 
-button {
-  font: inherit;
-  border: 1px solid var(--border);
-  background: var(--surface);
+.num {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Small label above a group. It always names what the group is. */
+.eyebrow {
+  font: 500 12px/1.2 var(--sans);
+  color: var(--muted);
+}
+
+/* Big readouts: thin, wide-spaced figures like a stopwatch face. */
+.readout {
+  font-family: var(--sans);
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+/* ---- Buttons and fields ---- */
+
+button,
+.button {
+  font: 500 13px/1 var(--sans);
   color: var(--text);
+  background: var(--raised);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 6px 12px;
+  padding: 9px 14px;
   cursor: pointer;
+  transition: background-color 0.12s, border-color 0.12s;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--muted);
 }
 
 button.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-text);
+  background: var(--invert-bg);
+  border-color: var(--invert-bg);
+  color: var(--invert-text);
+}
+
+button.primary:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+button.ghost {
+  background: transparent;
+  border-color: transparent;
+  padding: 6px 8px;
+  color: var(--muted);
+}
+
+button.ghost:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--line);
 }
 
 button:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 input,
-textarea {
+textarea,
+select {
   font: inherit;
   color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border);
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 6px 8px;
+  padding: 8px 10px;
+}
+
+input[type='number'],
+input[type='time'] {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--text);
 }
 
 textarea {
@@ -93,34 +190,186 @@ textarea {
   resize: vertical;
 }
 
-a {
-  color: var(--accent);
+/* An on/off switch built from a checkbox: <label class="switch"><input type="checkbox" /> Text</label> */
+.switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
 }
+
+.switch input {
+  appearance: none;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  border-radius: 999px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  position: relative;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.switch input::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 0.15s, background-color 0.15s;
+}
+
+.switch input:checked {
+  background: var(--invert-bg);
+  border-color: var(--invert-bg);
+}
+
+.switch input:checked::after {
+  transform: translateX(14px);
+  background: var(--invert-text);
+}
+
+.switch input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* ---- Surfaces ---- */
 
 .card {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px;
 }
 
+/* ---- State colours. Set on any element; rings, bars and chips inside pick it up. ---- */
+
+.ok {
+  --state: var(--text);
+}
+.study {
+  --state: var(--study);
+}
+.warn {
+  --state: var(--warn);
+}
+.over {
+  --state: var(--over);
+}
+
+/* ---- The ring gauge (see lib/ring.ts) ---- */
+
+/* The ring shows what kind of page this is (the AI's label); the numbers show how much time is left. */
+.cat-study {
+  --ring-color: var(--study);
+}
+.cat-distraction {
+  --ring-color: var(--over);
+}
+.cat-neutral {
+  --ring-color: var(--muted);
+}
+
+.ring {
+  display: block;
+  color: var(--ring-color, var(--state, var(--text)));
+  overflow: visible;
+}
+
+.ring-track {
+  stroke: var(--ring-track);
+}
+
+.ring .tick {
+  stroke: var(--ring-tick);
+}
+
+.ring .tick-major {
+  stroke: var(--ring-tick-major);
+}
+
+.ring-arc {
+  transition: stroke-dashoffset 0.6s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ring-arc {
+    transition: none;
+  }
+}
+
+/* ---- Segmented bar (lib/ring.ts segmentsHtml), matching the dial's marks ---- */
+
+.segments {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 2px;
+  height: 8px;
+}
+
+.segments i {
+  border-radius: 1px;
+  background: var(--ring-track);
+}
+
+.segments i.on {
+  background: var(--state, var(--text));
+}
+
+/* ---- Thin progress bar for lists ---- */
+
 .bar {
-  height: 6px;
-  border-radius: 3px;
-  background: var(--border);
+  height: 3px;
+  border-radius: 2px;
+  background: var(--ring-track);
   overflow: hidden;
 }
 
 .bar > span {
   display: block;
   height: 100%;
-  background: var(--ok);
+  background: var(--state, var(--text));
 }
 
-.bar.warn > span {
-  background: var(--warn);
+/* ---- AI label chip ---- */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: 600 11px/1 var(--sans);
+  padding: 4px 8px 4px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--state, var(--muted));
+  white-space: nowrap;
 }
 
-.bar.over > span {
-  background: var(--over);
+.chip::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.chip.neutral,
+.chip.checking {
+  --state: var(--muted);
+}
+
+.chip.distraction {
+  --state: var(--over);
+}
+
+.chip.offline {
+  --state: var(--warn);
 }
