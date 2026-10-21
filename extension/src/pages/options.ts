@@ -80,9 +80,18 @@ async function testBackend(): Promise<void> {
   }
 }
 
+/** The log starts collapsed to the latest few reasons. */
+const COLLAPSED_EXCUSES = 2
+let excusesExpanded = false
+
 async function renderExcuses(): Promise<void> {
   const list = document.querySelector('#excuses')!
+  const toggle = document.querySelector<HTMLButtonElement>('#excuses-toggle')!
   const excuses = (await getExcuses()).slice(0, 20)
+  const hidden = excuses.length - COLLAPSED_EXCUSES
+  toggle.hidden = hidden <= 0
+  toggle.textContent = excusesExpanded ? 'Show less' : `Show ${hidden} more`
+  toggle.setAttribute('aria-expanded', String(excusesExpanded))
   if (excuses.length === 0) {
     const li = document.createElement('li')
     li.className = 'muted small'
@@ -90,8 +99,9 @@ async function renderExcuses(): Promise<void> {
     list.replaceChildren(li)
     return
   }
+  const shown = excusesExpanded ? excuses : excuses.slice(0, COLLAPSED_EXCUSES)
   list.replaceChildren(
-    ...excuses.map((e) => {
+    ...shown.map((e) => {
       const li = document.createElement('li')
       li.className = e.verdict ?? 'allowed'
       const meta = document.createElement('div')
@@ -121,6 +131,10 @@ async function init(): Promise<void> {
   backendUrl.value = settings.backend.url
   renderLimits()
   await renderExcuses()
+  document.querySelector('#excuses-toggle')!.addEventListener('click', () => {
+    excusesExpanded = !excusesExpanded
+    void renderExcuses()
+  })
 
   defaultLimit.addEventListener('change', () => {
     const value = Number(defaultLimit.value)

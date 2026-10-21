@@ -124,6 +124,9 @@
       #excuses li.denied {
         --state: var(--over);
       }
+      #excuses-toggle {
+        margin-top: 10px;
+      }
       #excuses .reply {
         color: var(--state);
       }
@@ -211,6 +214,7 @@
           <h2>Your reasons for more time</h2>
         </div>
         <ul id="excuses"></ul>
+        <button type="button" class="ghost" id="excuses-toggle" aria-controls="excuses" hidden></button>
       </section>
     </main>
     <script type="module" src="./options.ts"></script>

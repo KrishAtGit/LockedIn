@@ -6,7 +6,7 @@ import browser from 'webextension-polyfill'
 import { aiLabel } from '../lib/labels'
 import { clock, fractionLeft, limitState, ringSvg } from '../lib/ring'
 import type { TimerStatus } from '../lib/status'
-import { formatDuration } from '../lib/time'
+import { MINUTE, formatDuration } from '../lib/time'
 
 const POLL_MS = 10_000
 /** Ask more often while the AI is still labelling the page, so the label shows up soon after it's ready. */
@@ -24,7 +24,7 @@ const STYLES = `
   .timer {
     --text: #e8e6e1; --muted: #8c8f96; --line: rgba(255, 255, 255, 0.1); --ring-track: rgba(255, 255, 255, 0.12);
     --ring-tick: rgba(255, 255, 255, 0.22); --ring-tick-major: #8c8f96;
-    --study: #4fd1bb; --warn: #f0a63a; --over: #f0645a;
+    --study: #4fd1bb; --warn: #f0a63a; --over: #f0645a; --lock: #9aa7ff;
     --mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
     --state: var(--text);
     position: fixed;
@@ -54,11 +54,13 @@ const STYLES = `
   .timer.study { --state: var(--study); }
   .timer.warn { --state: var(--warn); }
   .timer.over { --state: var(--over); }
+  .timer.lock { --state: var(--lock); }
 
   /* The ring shows what kind of page this is (the AI's label); the numbers show how much time is left. */
   .cat-study { --ring-color: var(--study); }
   .cat-distraction { --ring-color: var(--over); }
   .cat-neutral { --ring-color: var(--muted); }
+  .cat-lock { --ring-color: var(--lock); }
   .ring { display: block; color: var(--ring-color, var(--state)); overflow: visible; }
   .ring-track { stroke: var(--ring-track); }
   .ring .tick { stroke: var(--ring-tick); }
@@ -181,12 +183,15 @@ async function main(): Promise<void> {
       place()
     }
 
-    const { usedMs, limitMs, warnMs, exempt, site } = status
+    const { usedMs, limitMs, warnMs, exempt, site, focus } = status
     const left = limitMs - usedMs
-    const state = exempt ? 'study' : limitState(usedMs, limitMs, warnMs)
-    const category = status.category ? ` cat-${status.category}` : ''
+    // In a focus session the timer counts down the session, in the focus colour.
+    const focusLeft = focus ? focus.endsAt - Date.now() : 0
+    const state = focus ? 'lock' : exempt ? 'study' : limitState(usedMs, limitMs, warnMs)
+    const category = focus ? ' cat-lock' : status.category ? ` cat-${status.category}` : ''
     ui.box.className = `timer ${state}${category}${collapsed ? ' collapsed' : ''}${drag ? ' dragging' : ''}`
-    ui.ring.innerHTML = ringSvg(exempt ? 1 : fractionLeft(usedMs, limitMs), {
+    const ringLeft = focus ? focusLeft / (focus.minutes * MINUTE) : exempt ? 1 : fractionLeft(usedMs, limitMs)
+    ui.ring.innerHTML = ringSvg(ringLeft, {
       size: collapsed ? RING_SIZE_COLLAPSED : RING_SIZE,
       stroke: 3,
       ticks: collapsed ? 0 : 12,
@@ -201,8 +206,14 @@ async function main(): Promise<void> {
     ui.chip.textContent = label?.text ?? ''
     ui.chip.title = label?.detail ?? ''
 
-    ui.time.classList.toggle('word', exempt !== null)
-    if (exempt) {
+    ui.time.classList.toggle('word', !focus && exempt !== null)
+    if (focus) {
+      ui.time.textContent = clock(focusLeft)
+      const small = document.createElement('small')
+      small.textContent = 'locked in'
+      ui.time.append(small)
+      ui.detail.textContent = 'Distractions blocked'
+    } else if (exempt) {
       ui.time.innerHTML = 'Study<small>not counting</small>'
       ui.detail.textContent = `${formatDuration(usedMs)} of ${formatDuration(limitMs)} used today`
     } else {
@@ -237,7 +248,14 @@ async function main(): Promise<void> {
       void refresh()
       return
     }
-    if (status?.counting && !status.exempt && document.visibilityState === 'visible') {
+    if (document.visibilityState !== 'visible' || !status) return
+    if (status.focus) {
+      // Ask again once the session is over, so the timer goes back to the daily limit.
+      if (status.focus.endsAt <= Date.now()) void refresh()
+      else render()
+      return
+    }
+    if (status.counting && !status.exempt) {
       status.usedMs += 1000
       render()
     }
@@ -293,7 +311,7 @@ async function main(): Promise<void> {
       collapsed = Boolean(changes.timerCollapsed.newValue)
       render()
     }
-    if (changes.settings || changes.grants) void refresh()
+    if (changes.settings || changes.grants || changes.focus) void refresh()
   })
 
   await refresh()

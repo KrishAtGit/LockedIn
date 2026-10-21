@@ -35,13 +35,24 @@
       }
       .gauge-center .readout {
         font-size: 38px;
-        color: var(--over);
+        color: var(--state);
       }
-      .hero .ring-track {
+      .hero.over .ring-track {
         stroke: color-mix(in srgb, var(--over) 22%, transparent);
       }
-      .hero .tick-major {
+      .hero.over .tick-major {
         stroke: var(--over);
+      }
+      .hero.lock {
+        --state: var(--lock);
+        --ring-color: var(--lock);
+      }
+      .hero.lock .tick-major {
+        stroke: var(--lock);
+      }
+      #focus-note {
+        display: grid;
+        gap: 6px;
       }
       .hero h1 {
         font-size: 26px;
@@ -102,16 +113,16 @@
   </head>
   <body>
     <main>
-      <div class="hero over">
+      <div class="hero over" id="hero">
         <div class="gauge">
           <div id="ring"></div>
           <div class="gauge-center">
-            <span class="readout">0:00</span>
-            <span class="eyebrow">left today</span>
+            <span class="readout" id="readout">0:00</span>
+            <span class="eyebrow" id="readout-sub">left today</span>
           </div>
         </div>
         <div>
-          <span class="eyebrow">Limit reached</span>
+          <span class="eyebrow" id="kicker">Limit reached</span>
           <h1 id="title">Time's up</h1>
           <p class="muted" id="summary"></p>
         </div>
@@ -136,6 +147,14 @@
           <p id="verdict-text"></p>
         </div>
       </form>
+
+      <div class="card" id="focus-note" hidden>
+        <h2>Stay with it</h2>
+        <p class="muted small">
+          This page opens again by itself when the session ends. To stop early, click LockedIn in the toolbar and
+          choose <strong>End session early</strong>.
+        </p>
+      </div>
 
       <button class="ghost" id="close">Close this tab</button>
     </main>

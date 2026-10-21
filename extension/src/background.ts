@@ -1,5 +1,6 @@
 import browser from 'webextension-polyfill'
 import { api } from './lib/api'
+import { addFocusRecord, blockedDuringFocus, getFocus, type FocusSession } from './lib/focus'
 import {
   aiState,
   getVerdict,
@@ -32,6 +33,7 @@ interface Session {
 }
 
 const TICK_ALARM = 'tick'
+const FOCUS_ALARM = 'focus-end'
 const IDLE_SECONDS = 60
 /** Gaps longer than this between commits mean the machine slept or the worker was suspended, so they're not counted. */
 const MAX_COMMIT_GAP = 2 * MINUTE
@@ -159,6 +161,18 @@ async function enforce(target: Target): Promise<boolean> {
   const { domain } = target.page
   if (isAllowlisted(settings, domain) || (await isStudyPage(target.page.key))) return false
 
+  // During a focus session distractions are blocked outright, whatever time is left on their limit.
+  if (await getFocus()) {
+    const verdict = await getVerdict(target.page.key)
+    if (blockedDuringFocus(settings, target.page, verdict)) {
+      // Give the AI a moment first, so a lecture on YouTube isn't blocked before it's recognised as study.
+      if (settings.backend.enabled && !verdict && waitingForVerdict(target.page.key)) return false
+      const params = new URLSearchParams({ mode: 'focus', key: limitKey(settings, domain), url: target.url })
+      await browser.tabs.update(target.tabId, { url: browser.runtime.getURL(`pages/blocked.html?${params}`) })
+      return true
+    }
+  }
+
   const day = today()
   const key = limitKey(settings, domain)
   const usage = await getDaily('usage')
@@ -244,6 +258,56 @@ function logExcuse(excuse: Excuse, grantMinutes: number): Promise<void> {
   })
 }
 
+function startFocus(minutes: number): Promise<void> {
+  return serial(async () => {
+    const now = Date.now()
+    const focus: FocusSession = { startedAt: now, endsAt: now + minutes * MINUTE, minutes }
+    await browser.storage.local.set({ focus })
+    await browser.alarms.create(FOCUS_ALARM, { when: focus.endsAt })
+  }).then(tick)
+}
+
+/** Ends the current session early, keeping the reason for the weekly report. */
+function endFocusEarly(reason: string): Promise<void> {
+  return serial(async () => {
+    const focus = await getFocus()
+    if (!focus) return
+    await addFocusRecord({
+      startedAt: focus.startedAt,
+      minutes: focus.minutes,
+      focusedMs: Date.now() - focus.startedAt,
+      completed: false,
+      reason,
+    })
+    await browser.storage.local.set({ focus: null })
+    await browser.alarms.clear(FOCUS_ALARM)
+  })
+}
+
+/**
+ * Records a session whose time is up. Also runs at startup, in case the browser was closed when the session
+ * ended and the alarm never fired.
+ */
+function settleFinishedFocus(): Promise<void> {
+  return serial(async () => {
+    const { focus } = (await browser.storage.local.get('focus')) as { focus?: FocusSession | null }
+    if (!focus || focus.endsAt > Date.now()) return
+    await addFocusRecord({
+      startedAt: focus.startedAt,
+      minutes: focus.minutes,
+      focusedMs: focus.endsAt - focus.startedAt,
+      completed: true,
+    })
+    await browser.storage.local.set({ focus: null })
+    await browser.notifications.create('focus-done', {
+      type: 'basic',
+      iconUrl: browser.runtime.getURL('icons/icon-128.png'),
+      title: `Session complete: ${formatDuration(focus.minutes * MINUTE)} locked in`,
+      message: 'Nice work. Distraction sites are unblocked again.',
+    })
+  })
+}
+
 async function ensureAlarm(): Promise<void> {
   if (!(await browser.alarms.get(TICK_ALARM))) {
     await browser.alarms.create(TICK_ALARM, { periodInMinutes: 1 })
@@ -252,9 +316,11 @@ async function ensureAlarm(): Promise<void> {
 
 browser.idle.setDetectionInterval(IDLE_SECONDS)
 void ensureAlarm()
+void settleFinishedFocus()
 
 browser.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === TICK_ALARM) void tick()
+  if (alarm.name === FOCUS_ALARM) void settleFinishedFocus()
 })
 browser.tabs.onActivated.addListener(() => void tick())
 browser.tabs.onUpdated.addListener((_id, change) => {
@@ -290,13 +356,16 @@ async function siteStatus(tab: browser.Tabs.Tab | undefined): Promise<SiteStatus
     allowlisted: isAllowlisted(settings, page.domain),
     category: verdict?.category ?? null,
     ai: await aiState(settings.backend.enabled, page, verdict),
+    focus: await getFocus(),
   }
 }
 
 /** The floating timer is hidden when it's switched off, and on study sites where nothing is counted. */
 async function timerStatus(tab: browser.Tabs.Tab | undefined): Promise<TimerStatus> {
   const status = await siteStatus(tab)
-  if (!status || status.allowlisted || !(await getSettings()).showTimer) return { show: false }
+  if (!status || !(await getSettings()).showTimer) return { show: false }
+  // Study sites have nothing to count, so the timer only appears there to show a focus session.
+  if (status.allowlisted && !status.focus) return { show: false }
   return { show: true, ...status }
 }
 
@@ -307,11 +376,16 @@ type Message =
   | { type: 'timer-status' }
   /** Sent by the popup, about the tab it was opened over. */
   | { type: 'site-status'; tabId: number }
+  /** Sent by the popup. */
+  | { type: 'focus-start'; minutes: number }
+  | { type: 'focus-end-early'; reason: string }
 
 browser.runtime.onMessage.addListener((message: unknown, sender: browser.Runtime.MessageSender) => {
   const msg = message as Message
   if (msg.type === 'timer-status') return timerStatus(sender.tab)
   if (msg.type === 'site-status') return browser.tabs.get(msg.tabId).then(siteStatus)
+  if (msg.type === 'focus-start') return startFocus(msg.minutes)
+  if (msg.type === 'focus-end-early') return endFocusEarly(msg.reason)
   if (msg.type !== 'excuse') return undefined
   const excuse: Excuse = {
     ts: Date.now(),

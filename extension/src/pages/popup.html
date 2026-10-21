@@ -80,6 +80,50 @@
         margin-top: -4px;
       }
 
+      .focus {
+        margin: 0 16px;
+        padding: 14px 0;
+        border-top: 1px solid var(--line);
+        display: grid;
+        gap: 10px;
+      }
+      .focus-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+      }
+      .lengths {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+      }
+      .lengths button {
+        padding: 10px 0;
+        color: var(--muted);
+      }
+      .lengths .readout {
+        font-size: 20px;
+        color: var(--text);
+        margin-right: 2px;
+      }
+      .lengths button:hover {
+        border-color: var(--lock);
+      }
+      #end-early {
+        justify-self: center;
+      }
+      #end-form {
+        display: grid;
+        gap: 8px;
+      }
+      .end-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      #now.lock #now-time {
+        color: var(--lock);
+      }
       .totals {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -159,6 +203,25 @@
         <span class="chip" id="now-chip" hidden></span>
       </div>
       <p class="muted small" id="now-detail"></p>
+    </section>
+
+    <section class="focus" id="focus-start" hidden>
+      <div class="focus-head">
+        <span class="eyebrow">Lock in</span>
+        <span class="muted small">Block distractions for</span>
+      </div>
+      <div class="lengths" id="focus-lengths"></div>
+    </section>
+
+    <section class="focus" id="focus-active" hidden>
+      <button class="ghost" id="end-early">End session early</button>
+      <form id="end-form" hidden>
+        <textarea id="end-reason" rows="2" placeholder="Why are you stopping?" aria-label="Why are you ending the session early?"></textarea>
+        <div class="end-row">
+          <button type="submit" id="end-confirm" disabled>End session</button>
+          <span class="muted small" id="end-hint" role="status"></span>
+        </div>
+      </form>
     </section>
 
     <section class="totals">

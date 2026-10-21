@@ -19,6 +19,7 @@
   --warn: #b86e00;
   --over: #c8352c;
   --focus: #141518;
+  --lock: #4f5bd5;
 
   --sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
@@ -43,11 +44,17 @@
     --warn: #f0a63a;
     --over: #f0645a;
     --focus: #e8e6e1;
+    --lock: #9aa7ff;
   }
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* Layout rules like display: grid would otherwise override the hidden attribute. */
+[hidden] {
+  display: none !important;
 }
 
 body {
@@ -263,6 +270,9 @@ textarea {
 .over {
   --state: var(--over);
 }
+.lock {
+  --state: var(--lock);
+}
 
 /* ---- The ring gauge (see lib/ring.ts) ---- */
 
@@ -275,6 +285,9 @@ textarea {
 }
 .cat-neutral {
   --ring-color: var(--muted);
+}
+.cat-lock {
+  --ring-color: var(--lock);
 }
 
 .ring {

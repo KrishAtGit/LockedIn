@@ -1,7 +1,8 @@
 import browser from 'webextension-polyfill'
 import { api } from '../lib/api'
 import { domainOf } from '../lib/domain'
-import { ringSvg } from '../lib/ring'
+import { getFocus, type FocusSession } from '../lib/focus'
+import { clock, ringSvg } from '../lib/ring'
 import { baseLimitMs, getExcuses, getSettings, getTodayUsage, usedMs } from '../lib/storage'
 import { MINUTE, formatDuration, today } from '../lib/time'
 
@@ -14,6 +15,8 @@ const APPROVED_PAUSE_MS = 1500
 const params = new URLSearchParams(location.search)
 const key = params.get('key') ?? ''
 const returnUrl = params.get('url') ?? ''
+/** 'focus' when blocked by a focus session rather than by the daily limit. */
+const mode = params.get('mode')
 
 const reason = document.querySelector<HTMLTextAreaElement>('#reason')!
 const hint = document.querySelector('#hint')!
@@ -65,7 +68,43 @@ function goBack(): void {
   else history.back()
 }
 
+/** Blocked by a focus session: count the session down, then go back to the page when it's over. */
+function showFocus(focus: FocusSession): void {
+  const $ = (sel: string) => document.querySelector<HTMLElement>(sel)!
+  document.title = 'Locked in · LockedIn'
+  $('#hero').className = 'hero lock'
+  $('#kicker').textContent = 'Focus session'
+  $('#title').textContent = 'You’re locked in'
+  const until = new Date(focus.endsAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  $('#summary').textContent = `${key} is blocked until ${until}. Close it and get back to it.`
+  $('#readout-sub').textContent = 'locked in'
+  $('#negotiate').hidden = true
+  $('#focus-note').hidden = false
+
+  const draw = () => {
+    const left = focus.endsAt - Date.now()
+    if (left <= 0) {
+      goBack()
+      return
+    }
+    $('#readout').textContent = clock(left)
+    $('#ring').innerHTML = ringSvg(left / (focus.minutes * MINUTE), { size: 176, stroke: 6 })
+  }
+  draw()
+  setInterval(draw, 1000)
+  // Ended early from the popup: go straight back.
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.focus && !changes.focus.newValue) goBack()
+  })
+}
+
 async function init(): Promise<void> {
+  if (mode === 'focus') {
+    const focus = await getFocus()
+    if (focus) showFocus(focus)
+    else goBack()
+    return
+  }
   document.querySelector('#ring')!.innerHTML = ringSvg(0, { size: 176, stroke: 6 })
   const settings = await getSettings()
   const used = usedMs(await getTodayUsage(), key)
