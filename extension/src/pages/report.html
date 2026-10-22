@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Weekly report · LockedIn</title>
+    <link rel="stylesheet" href="./style.css" />
+    <style>
+      :root {
+        /* Counted time in the chart. Dark grey against the teal study colour, so the two stay apart for
+           colour-blind readers too (checked with a CVD validator). */
+        --counted: #33353a;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --counted: #8c8f96;
+        }
+      }
+
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 40px 16px 64px;
+        display: grid;
+        gap: 14px;
+      }
+      .page-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 10px;
+      }
+      .page-head img {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+      }
+      .page-head p {
+        margin-top: 4px;
+      }
+      .card {
+        display: grid;
+        gap: 14px;
+        align-content: start;
+      }
+      .card-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 6px 12px;
+      }
+
+      /* ---- Headline numbers ---- */
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 14px;
+      }
+      .stat {
+        display: grid;
+        gap: 6px;
+        align-content: start;
+      }
+      .stat .readout {
+        font-size: 30px;
+      }
+      #stat-study {
+        color: var(--study);
+      }
+      #stat-locked {
+        color: var(--lock);
+      }
+
+      /* ---- Last 7 days: stacked bars ---- */
+      .legend {
+        display: flex;
+        gap: 14px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .legend i {
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+      }
+      .chart {
+        position: relative;
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 8px;
+        height: 180px;
+        padding-top: 18px;
+        border-bottom: 1px solid var(--line);
+      }
+      .chart .max {
+        position: absolute;
+        inset: 18px 0 auto;
+        border-top: 1px dashed var(--line);
+        font-size: 11px;
+        color: var(--muted);
+        text-align: right;
+        pointer-events: none;
+      }
+      .chart .max span {
+        position: relative;
+        top: -16px;
+        background: var(--surface);
+        padding-left: 6px;
+      }
+      .col {
+        all: unset;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        align-items: center;
+        cursor: default;
+        border-radius: 6px;
+      }
+      .col:focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: 2px;
+      }
+      .stack {
+        width: min(36px, 70%);
+        display: flex;
+        flex-direction: column-reverse;
+        gap: 2px;
+      }
+      .stack i {
+        display: block;
+        min-height: 0;
+      }
+      .stack i:last-child {
+        border-radius: 4px 4px 0 0;
+      }
+      .stack .counted {
+        background: var(--counted);
+      }
+      .stack .study {
+        background: var(--study);
+      }
+      .col:hover .stack,
+      .col:focus-visible .stack {
+        filter: brightness(1.12);
+      }
+      .days {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 8px;
+        text-align: center;
+        font-size: 12px;
+      }
+      .days .today {
+        color: var(--text);
+        font-weight: 600;
+      }
+      .days small {
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      #tooltip {
+        position: absolute;
+        z-index: 2;
+        min-width: 150px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: var(--invert-bg);
+        color: var(--invert-text);
+        font-size: 12px;
+        pointer-events: none;
+        transform: translate(-50%, calc(-100% - 8px));
+        white-space: nowrap;
+      }
+      #tooltip b {
+        display: block;
+        margin-bottom: 4px;
+      }
+      details summary {
+        cursor: pointer;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+        font-size: 13px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 6px 0;
+        border-top: 1px solid var(--line);
+      }
+      th:not(:first-child),
+      td:not(:first-child) {
+        text-align: right;
+      }
+
+      /* ---- Lists ---- */
+      .two {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 14px;
+      }
+      ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 10px;
+      }
+      .site {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 72px 56px;
+        align-items: center;
+        gap: 12px;
+      }
+      .site .domain {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .site .segments {
+        --state: var(--counted);
+      }
+      .site .num {
+        text-align: right;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .counts {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 14px 20px;
+      }
+      .counts div {
+        display: grid;
+        gap: 2px;
+      }
+      .counts .readout {
+        font-size: 22px;
+      }
+      .reasons li {
+        display: grid;
+        gap: 2px;
+        padding-left: 10px;
+        border-left: 2px solid var(--state, var(--line));
+      }
+      .reasons li.denied {
+        --state: var(--over);
+      }
+      .reasons li.allowed {
+        --state: var(--study);
+      }
+      .reasons li.lock {
+        --state: var(--lock);
+      }
+      .empty {
+        color: var(--muted);
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="page-head">
+        <img src="/icons/icon-128.png" alt="" />
+        <div>
+          <h1>Weekly report</h1>
+          <p class="muted small" id="range"></p>
+        </div>
+      </div>
+
+      <section class="card stats" aria-label="This week">
+        <div class="stat">
+          <span class="eyebrow">Counted time</span>
+          <span class="readout" id="stat-counted">0m</span>
+          <span class="muted small" id="stat-counted-change"></span>
+        </div>
+        <div class="stat">
+          <span class="eyebrow">Studying</span>
+          <span class="readout" id="stat-study">0m</span>
+          <span class="muted small" id="stat-study-change"></span>
+        </div>
+        <div class="stat">
+          <span class="eyebrow">Locked in</span>
+          <span class="readout" id="stat-locked">0m</span>
+          <span class="muted small">Focus sessions and quiet hours</span>
+        </div>
+        <div class="stat">
+          <span class="eyebrow">Asked for more time</span>
+          <span class="readout" id="stat-asks">0</span>
+          <span class="muted small" id="stat-asks-detail"></span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Last 7 days</h2>
+          <div class="legend" aria-hidden="true">
+            <span><i style="background: var(--study)"></i>Studying</span>
+            <span><i style="background: var(--counted)"></i>Counted</span>
+          </div>
+        </div>
+        <div class="chart" id="chart" role="img" aria-label="Time per day, split into studying and counted time. Full numbers are in the table below.">
+          <div class="max"><span id="chart-max"></span></div>
+        </div>
+        <div class="days" id="chart-days" aria-hidden="true"></div>
+        <details>
+          <summary>Show as a table</summary>
+          <table>
+            <thead>
+              <tr><th>Day</th><th>Studying</th><th>Counted</th><th>Total</th></tr>
+            </thead>
+            <tbody id="chart-table"></tbody>
+          </table>
+        </details>
+      </section>
+
+      <div class="two">
+        <section class="card">
+          <div class="card-head"><h2>Top sites</h2><span class="eyebrow">Counted time</span></div>
+          <ul id="sites"></ul>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><h2>Locked in</h2><span class="eyebrow">This week</span></div>
+          <div class="counts">
+            <div><span class="readout" id="focus-done">0</span><span class="eyebrow">Sessions finished</span></div>
+            <div><span class="readout" id="focus-early">0</span><span class="eyebrow">Ended early</span></div>
+            <div><span class="readout" id="quiet-done">0</span><span class="eyebrow">Quiet hours kept</span></div>
+            <div><span class="readout" id="quiet-skipped">0</span><span class="eyebrow">Skipped</span></div>
+          </div>
+          <ul class="reasons" id="early-reasons"></ul>
+        </section>
+      </div>
+
+      <section class="card">
+        <div class="card-head"><h2>Your reasons for more time</h2><span class="eyebrow">Latest this week</span></div>
+        <ul class="reasons" id="excuses"></ul>
+      </section>
+    </main>
+    <script type="module" src="./report.ts"></script>
+  </body>
+</html>

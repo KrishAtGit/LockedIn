@@ -234,5 +234,9 @@ async function init(): Promise<void> {
 }
 
 $('#open-options').addEventListener('click', () => void browser.runtime.openOptionsPage())
+$('#open-report').addEventListener('click', () => {
+  void browser.tabs.create({ url: browser.runtime.getURL('pages/report.html') })
+  window.close()
+})
 
 void init()

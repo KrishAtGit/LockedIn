@@ -33,6 +33,7 @@ export default defineConfig({
         popup: resolve(import.meta.dirname, 'src/pages/popup.html'),
         options: resolve(import.meta.dirname, 'src/pages/options.html'),
         blocked: resolve(import.meta.dirname, 'src/pages/blocked.html'),
+        report: resolve(import.meta.dirname, 'src/pages/report.html'),
       },
       output: {
         entryFileNames: '[name].js',
