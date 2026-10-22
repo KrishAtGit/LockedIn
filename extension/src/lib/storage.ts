@@ -1,6 +1,7 @@
 import browser from 'webextension-polyfill'
 import { matchesDomain } from './domain'
-import { MINUTE, today } from './time'
+import type { QuietBlock } from './schedule'
+import { DAY, MINUTE, today } from './time'
 
 export interface Settings {
   defaultLimitMin: number
@@ -11,6 +12,8 @@ export interface Settings {
   warnBeforeMin: number
   /** Show the floating timer on websites. */
   showTimer: boolean
+  /** Weekly schedules that block distractions, like a focus session that starts by itself. */
+  quietHours: QuietBlock[]
   backend: BackendSettings
 }
 
@@ -40,6 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   allowlist: ['canvas.instructure.com', 'moodle.org', 'scholar.google.com'],
   warnBeforeMin: 5,
   showTimer: true,
+  quietHours: [],
   backend: { enabled: false, url: 'http://localhost:8000' },
 }
 
@@ -57,6 +61,23 @@ export async function saveSettings(settings: Settings): Promise<void> {
 export async function getDaily(key: 'usage' | 'study' | 'grants'): Promise<DailyMap> {
   const result = await browser.storage.local.get(key)
   return (result[key] as DailyMap | undefined) ?? {}
+}
+
+/** How much daily history is kept. Enough for weekly reports and monthly trends, and no more. */
+export const KEEP_DAYS = 90
+
+/** Deletes per-day totals older than KEEP_DAYS. */
+export async function pruneOldDays(now = Date.now()): Promise<void> {
+  const cutoff = today(now - KEEP_DAYS * DAY)
+  const keys = ['usage', 'study', 'grants'] as const
+  const stored = await browser.storage.local.get([...keys])
+  const update: Record<string, DailyMap> = {}
+  for (const key of keys) {
+    const days = (stored[key] as DailyMap | undefined) ?? {}
+    const kept = Object.fromEntries(Object.entries(days).filter(([day]) => day >= cutoff))
+    if (Object.keys(kept).length < Object.keys(days).length) update[key] = kept
+  }
+  if (Object.keys(update).length > 0) await browser.storage.local.set(update)
 }
 
 export async function getTodayUsage(): Promise<Record<string, number>> {

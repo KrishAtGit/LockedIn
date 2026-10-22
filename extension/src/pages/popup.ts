@@ -2,12 +2,14 @@ import browser from 'webextension-polyfill'
 import {
   END_EARLY_WAIT_SECONDS,
   FOCUS_LENGTHS,
+  LOCK_KEYS,
   MIN_END_REASON_LENGTH,
-  getFocus,
-  type FocusSession,
+  getActiveLock,
+  lockFractionLeft,
+  type ActiveLock,
 } from '../lib/focus'
 import { aiLabel } from '../lib/labels'
-import { clock, fractionLeft, limitState, ringSvg, segmentsHtml } from '../lib/ring'
+import { fractionLeft, limitState, ringSvg, segmentsHtml, setClock } from '../lib/ring'
 import type { SiteStatus } from '../lib/status'
 import {
   baseLimitMs,
@@ -18,7 +20,7 @@ import {
   limitKey,
   usedMs,
 } from '../lib/storage'
-import { MINUTE, formatDuration, today } from '../lib/time'
+import { MINUTE, formatDuration, timeOfDay, today } from '../lib/time'
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!
 
@@ -79,6 +81,7 @@ function renderSite(status: SiteStatus): void {
   $('#now-ring').innerHTML = ringSvg(free ? 1 : fractionLeft(status.usedMs, status.limitMs), { size: 176, stroke: 6 })
   // Words ("Study", "Free") are set smaller than the countdown so they always fit inside the ring.
   $('#now-time').classList.toggle('word', free)
+  $('#now-time').classList.remove('long')
 
   if (status.allowlisted) {
     $('#now-time').textContent = 'Free'
@@ -89,27 +92,26 @@ function renderSite(status: SiteStatus): void {
     $('#now-sub').textContent = 'not counting'
     $('#now-detail').textContent = `${formatDuration(status.usedMs)} of ${formatDuration(status.limitMs)} used today`
   } else {
-    $('#now-time').textContent = clock(left)
+    setClock($('#now-time'), left)
     $('#now-sub').textContent = left > 0 ? 'left' : 'time’s up'
     $('#now-detail').textContent = `${formatDuration(status.usedMs)} of ${formatDuration(status.limitMs)} used today`
   }
   renderSiteMeta(status)
 }
 
-/** During a focus session the dial counts down the session instead of the site's limit. */
-function renderFocusDial(focus: FocusSession, status: SiteStatus | null): void {
+/** During a focus session or quiet hours the dial counts down the lock instead of the site's limit. */
+function renderLockDial(lock: ActiveLock, status: SiteStatus | null): void {
   const section = $('#now')
-  const left = focus.endsAt - Date.now()
   section.className = 'lock cat-lock'
   section.hidden = false
-  $('#now-ring').innerHTML = ringSvg(left / (focus.minutes * MINUTE), { size: 176, stroke: 6 })
+  $('#now-ring').innerHTML = ringSvg(lockFractionLeft(lock), { size: 176, stroke: 6 })
   $('#now-time').classList.remove('word')
-  $('#now-time').textContent = clock(left)
-  $('#now-sub').textContent = 'locked in'
-  $('#now-detail').textContent = `Distractions blocked until ${timeOfDay(focus.endsAt)}`
+  setClock($('#now-time'), lock.endsAt - Date.now())
+  $('#now-sub').textContent = lock.kind === 'focus' ? 'locked in' : 'quiet hours'
+  $('#now-detail').textContent = `Distractions blocked until ${timeOfDay(lock.endsAt)}`
   if (status) renderSiteMeta(status)
   else {
-    $('#now-site').textContent = 'Focus session'
+    $('#now-site').textContent = lock.kind === 'focus' ? 'Focus session' : 'Quiet hours'
     $('#now-chip').hidden = true
   }
 }
@@ -127,24 +129,34 @@ function renderSiteMeta(status: SiteStatus): void {
   }
 }
 
-function timeOfDay(ts: number): string {
-  return new Date(ts).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+let status: SiteStatus | null = null
+let lock: ActiveLock | null = null
+
+async function refreshLock(): Promise<void> {
+  lock = await getActiveLock()
+  render()
 }
 
-let status: SiteStatus | null = null
-let focus: FocusSession | null = null
-
 function render(): void {
-  if (focus && focus.endsAt <= Date.now()) focus = null
-  if (focus) renderFocusDial(focus, status)
+  if (lock && lock.endsAt <= Date.now()) {
+    // Quiet hours can roll straight into another block, so ask rather than assume it's over.
+    lock = null
+    void refreshLock()
+  }
+  if (lock) renderLockDial(lock, status)
   else if (status) renderSite(status)
   else $('#now').hidden = true
 
-  $('#focus-start').hidden = focus !== null
-  $('#focus-active').hidden = focus === null
+  // Already locked in during quiet hours, so there's no session to start.
+  $('#focus-start').hidden = lock !== null
+  $('#focus-active').hidden = lock === null
+  if (lock) {
+    $('#end-early').textContent = lock.kind === 'focus' ? 'End session early' : 'Skip the rest of quiet hours'
+    endButton.textContent = lock.kind === 'focus' ? 'End session' : 'Skip quiet hours'
+  }
 }
 
-// ---- Ending a session early: write why, then wait. ----
+// ---- Ending a session early (or skipping quiet hours): write why, then wait. ----
 
 const endForm = $<HTMLFormElement>('#end-form')
 const endReason = $<HTMLTextAreaElement>('#end-reason')
@@ -179,7 +191,9 @@ endReason.addEventListener('input', updateEndButton)
 
 endForm.addEventListener('submit', async (e) => {
   e.preventDefault()
-  await browser.runtime.sendMessage({ type: 'focus-end-early', reason: endReason.value.trim() })
+  if (!lock) return
+  const type = lock.kind === 'focus' ? 'focus-end-early' : 'quiet-skip'
+  await browser.runtime.sendMessage({ type, reason: endReason.value.trim() })
   window.close()
 })
 
@@ -196,21 +210,16 @@ $('#focus-lengths').replaceChildren(
   }),
 )
 
-// The session can end (or start in another window) while the popup is open.
+// A session can end (or start in another window) while the popup is open.
 browser.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes.focus) {
-    void getFocus().then((f) => {
-      focus = f
-      render()
-    })
-  }
+  if (area === 'local' && LOCK_KEYS.some((key) => changes[key])) void refreshLock()
 })
 
 async function init(): Promise<void> {
   $('#date').textContent = new Date().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
   void renderToday()
 
-  focus = await getFocus()
+  lock = await getActiveLock()
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
   if (tab?.id !== undefined) {
     status = (await browser.runtime.sendMessage({ type: 'site-status', tabId: tab.id })) as SiteStatus | null

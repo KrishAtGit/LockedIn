@@ -37,6 +37,9 @@
         font-size: 38px;
         color: var(--state);
       }
+      .gauge-center .readout.long {
+        font-size: 26px;
+      }
       .hero.over .ring-track {
         stroke: color-mix(in srgb, var(--over) 22%, transparent);
       }
@@ -150,10 +153,7 @@
 
       <div class="card" id="focus-note" hidden>
         <h2>Stay with it</h2>
-        <p class="muted small">
-          This page opens again by itself when the session ends. To stop early, click LockedIn in the toolbar and
-          choose <strong>End session early</strong>.
-        </p>
+        <p class="muted small" id="focus-note-text"></p>
       </div>
 
       <button class="ghost" id="close">Close this tab</button>

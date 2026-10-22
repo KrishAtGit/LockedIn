@@ -1,7 +1,10 @@
 import browser from 'webextension-polyfill'
 import { api } from '../lib/api'
 import { domainOf } from '../lib/domain'
+import { getQuietSkips } from '../lib/focus'
+import { DAY_NAMES, activeQuietRun, quietLengthMinutes, type QuietBlock } from '../lib/schedule'
 import { getExcuses, getSettings, saveSettings, type Settings } from '../lib/storage'
+import { MINUTE, formatDuration, timeOfDay } from '../lib/time'
 
 const defaultLimit = document.querySelector<HTMLInputElement>('#default-limit')!
 const warnBefore = document.querySelector<HTMLInputElement>('#warn-before')!
@@ -54,6 +57,125 @@ function renderLimits(): void {
         return tr
       }),
   )
+}
+
+/** Monday first, as most calendars here show the week. */
+const WEEK = [1, 2, 3, 4, 5, 6, 0]
+const quietList = document.querySelector('#quiet-list')!
+
+/** Ids of the quiet hours running right now, which are locked until they end. */
+async function runningQuiet(): Promise<Map<string, number>> {
+  const skips = await getQuietSkips()
+  const running = new Map<string, number>()
+  for (const block of settings.quietHours) {
+    const run = activeQuietRun([block], Date.now(), skips)
+    if (run) running.set(block.id, run.end)
+  }
+  return running
+}
+let runningKey = ''
+
+async function renderQuiet(): Promise<void> {
+  const running = await runningQuiet()
+  runningKey = [...running.keys()].join()
+  quietList.replaceChildren(...settings.quietHours.map((block) => quietRow(block, running.get(block.id))))
+}
+
+function quietRow(block: QuietBlock, runningUntil: number | undefined): HTMLLIElement {
+  const locked = runningUntil !== undefined
+  const li = document.createElement('li')
+  li.className = 'quiet-row'
+  li.dataset.running = String(locked)
+
+  const days = document.createElement('div')
+  days.className = 'days'
+  days.setAttribute('role', 'group')
+  days.setAttribute('aria-label', 'Days')
+  for (const day of WEEK) {
+    const label = document.createElement('label')
+    label.className = 'day'
+    label.title = DAY_NAMES[day]
+    const box = document.createElement('input')
+    box.type = 'checkbox'
+    box.checked = block.days.includes(day)
+    box.disabled = locked
+    box.setAttribute('aria-label', DAY_NAMES[day])
+    box.addEventListener('change', () => {
+      block.days = box.checked ? [...block.days, day] : block.days.filter((d) => d !== day)
+      void save()
+    })
+    label.append(box, DAY_NAMES[day][0])
+    days.append(label)
+  }
+
+  const length = document.createElement('span')
+  length.className = 'muted small quiet-length'
+  const describeLength = () => {
+    const overnight = block.end <= block.start
+    length.textContent = `${formatDuration(quietLengthMinutes(block) * MINUTE)}${overnight ? ' · ends next day' : ''}`
+  }
+  describeLength()
+
+  const times = document.createElement('div')
+  times.className = 'times'
+  const time = (field: 'start' | 'end', name: string) => {
+    const input = document.createElement('input')
+    input.type = 'time'
+    input.value = block[field]
+    input.disabled = locked
+    input.required = true
+    input.setAttribute('aria-label', name)
+    input.addEventListener('change', () => {
+      if (!input.value) return
+      block[field] = input.value
+      describeLength()
+      void save()
+    })
+    return input
+  }
+  const dash = document.createElement('span')
+  dash.className = 'muted'
+  dash.textContent = '–'
+  times.append(time('start', 'Starts at'), dash, time('end', 'Ends at'))
+
+  const toggle = document.createElement('label')
+  toggle.className = 'switch'
+  const on = document.createElement('input')
+  on.type = 'checkbox'
+  on.checked = block.enabled
+  on.disabled = locked
+  on.setAttribute('aria-label', 'Quiet hours on')
+  on.addEventListener('change', () => {
+    block.enabled = on.checked
+    void save().then(renderQuiet)
+  })
+  toggle.append(on)
+
+  const remove = document.createElement('button')
+  remove.type = 'button'
+  remove.className = 'ghost'
+  remove.textContent = 'Remove'
+  remove.disabled = locked
+  remove.setAttribute('aria-label', 'Remove these quiet hours')
+  remove.addEventListener('click', () => {
+    settings.quietHours = settings.quietHours.filter((b) => b.id !== block.id)
+    void save().then(renderQuiet)
+  })
+
+  const top = document.createElement('div')
+  top.className = 'quiet-top'
+  top.append(days, toggle, remove)
+  const when = document.createElement('div')
+  when.className = 'quiet-when'
+  when.append(times, length)
+  li.append(top, when)
+  if (locked) {
+    const note = document.createElement('span')
+    note.className = 'small quiet-running'
+    note.textContent = `Running now until ${timeOfDay(runningUntil)}. To stop early, use Skip in the LockedIn popup.`
+    li.append(note)
+  }
+  return li
 }
 
 function setBackendStatus(text: string, ok?: boolean): void {
@@ -130,10 +252,24 @@ async function init(): Promise<void> {
   backendEnabled.checked = settings.backend.enabled
   backendUrl.value = settings.backend.url
   renderLimits()
+  await renderQuiet()
   await renderExcuses()
   document.querySelector('#excuses-toggle')!.addEventListener('click', () => {
     excusesExpanded = !excusesExpanded
     void renderExcuses()
+  })
+
+  document.querySelector('#quiet-add')!.addEventListener('click', () => {
+    settings.quietHours.push({ id: crypto.randomUUID(), days: [1, 2, 3, 4, 5], start: '09:00', end: '17:00', enabled: false })
+    void save().then(renderQuiet)
+  })
+  // Lock or unlock rows as quiet hours start and end, without redrawing (and interrupting) rows being edited.
+  const recheckRunning = async () => {
+    if ([...(await runningQuiet()).keys()].join() !== runningKey) await renderQuiet()
+  }
+  setInterval(() => void recheckRunning(), 15_000)
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.quietSkips) void recheckRunning()
   })
 
   defaultLimit.addEventListener('change', () => {

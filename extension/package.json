@@ -10,12 +10,14 @@
     "build": "tsc && rm -rf dist && npm run build:target --target=chrome && npm run build:target --target=firefox",
     "icons": "node scripts/make-icons.mjs",
     "api:types": "uv run --directory ../backend python -m scripts.export_openapi > ../backend/openapi.json && npx -y openapi-typescript@7.13.0 ../backend/openapi.json -o src/lib/api-types.ts",
-    "build:target": "TARGET=$npm_config_target vite build && TARGET=$npm_config_target vite build -c vite.content.config.ts"
+    "build:target": "TARGET=$npm_config_target vite build && TARGET=$npm_config_target vite build -c vite.content.config.ts",
+    "test": "TZ=Australia/Melbourne vitest run"
   },
   "devDependencies": {
     "@types/webextension-polyfill": "^0.12.6",
     "typescript": "~6.0.2",
-    "vite": "^8.3.0"
+    "vite": "^8.3.0",
+    "vitest": "^5.0.5"
   },
   "dependencies": {
     "webextension-polyfill": "^0.12.0"

@@ -1,10 +1,10 @@
 import browser from 'webextension-polyfill'
 import { api } from '../lib/api'
 import { domainOf } from '../lib/domain'
-import { getFocus, type FocusSession } from '../lib/focus'
-import { clock, ringSvg } from '../lib/ring'
+import { LOCK_KEYS, getActiveLock, lockFractionLeft, type ActiveLock } from '../lib/focus'
+import { ringSvg, setClock } from '../lib/ring'
 import { baseLimitMs, getExcuses, getSettings, getTodayUsage, usedMs } from '../lib/storage'
-import { MINUTE, formatDuration, today } from '../lib/time'
+import { MINUTE, formatDuration, timeOfDay, today } from '../lib/time'
 
 const MIN_REASON_LENGTH = 15
 /** Each extra request today makes you wait longer before you can ask again. */
@@ -15,7 +15,7 @@ const APPROVED_PAUSE_MS = 1500
 const params = new URLSearchParams(location.search)
 const key = params.get('key') ?? ''
 const returnUrl = params.get('url') ?? ''
-/** 'focus' when blocked by a focus session rather than by the daily limit. */
+/** 'lock' when blocked by a focus session or quiet hours rather than by the daily limit ('focus' from older versions). */
 const mode = params.get('mode')
 
 const reason = document.querySelector<HTMLTextAreaElement>('#reason')!
@@ -68,40 +68,59 @@ function goBack(): void {
   else history.back()
 }
 
-/** Blocked by a focus session: count the session down, then go back to the page when it's over. */
-function showFocus(focus: FocusSession): void {
+/**
+ * Blocked by a focus session or quiet hours: count it down, then go back to the page once it's over, whether it
+ * ran out, was ended early from the popup, or quiet hours were skipped.
+ */
+function showLock(first: ActiveLock): void {
   const $ = (sel: string) => document.querySelector<HTMLElement>(sel)!
-  document.title = 'Locked in · LockedIn'
+  let lock = first
   $('#hero').className = 'hero lock'
-  $('#kicker').textContent = 'Focus session'
-  $('#title').textContent = 'You’re locked in'
-  const until = new Date(focus.endsAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-  $('#summary').textContent = `${key} is blocked until ${until}. Close it and get back to it.`
-  $('#readout-sub').textContent = 'locked in'
   $('#negotiate').hidden = true
   $('#focus-note').hidden = false
 
-  const draw = () => {
-    const left = focus.endsAt - Date.now()
-    if (left <= 0) {
+  const describe = () => {
+    const focus = lock.kind === 'focus'
+    document.title = `${focus ? 'Locked in' : 'Quiet hours'} · LockedIn`
+    $('#kicker').textContent = focus ? 'Focus session' : 'Quiet hours'
+    $('#title').textContent = focus ? 'You’re locked in' : 'It’s quiet hours'
+    $('#summary').textContent = `${key} is blocked until ${timeOfDay(lock.endsAt)}. Close it and get back to it.`
+    $('#readout-sub').textContent = focus ? 'locked in' : 'quiet hours'
+    $('#focus-note-text').textContent = focus
+      ? 'This page opens again by itself when the session ends. To stop early, click LockedIn in the toolbar and choose End session early.'
+      : 'This page opens again by itself when quiet hours end. To skip them today, click LockedIn in the toolbar and choose Skip the rest of quiet hours.'
+  }
+  /** Back to the page if nothing is blocking it any more, or keep counting down whatever is. */
+  const recheck = async () => {
+    const next = await getActiveLock()
+    if (!next) {
       goBack()
       return
     }
-    $('#readout').textContent = clock(left)
-    $('#ring').innerHTML = ringSvg(left / (focus.minutes * MINUTE), { size: 176, stroke: 6 })
+    lock = next
+    describe()
   }
+  const draw = () => {
+    const left = lock.endsAt - Date.now()
+    if (left <= 0) {
+      void recheck()
+      return
+    }
+    setClock($('#readout'), left)
+    $('#ring').innerHTML = ringSvg(lockFractionLeft(lock), { size: 176, stroke: 6 })
+  }
+  describe()
   draw()
   setInterval(draw, 1000)
-  // Ended early from the popup: go straight back.
   browser.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes.focus && !changes.focus.newValue) goBack()
+    if (area === 'local' && LOCK_KEYS.some((k) => changes[k])) void recheck()
   })
 }
 
 async function init(): Promise<void> {
-  if (mode === 'focus') {
-    const focus = await getFocus()
-    if (focus) showFocus(focus)
+  if (mode === 'lock' || mode === 'focus') {
+    const lock = await getActiveLock()
+    if (lock) showLock(lock)
     else goBack()
     return
   }

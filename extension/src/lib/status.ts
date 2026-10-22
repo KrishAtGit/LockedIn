@@ -1,5 +1,5 @@
 import type { Category } from './api'
-import type { FocusSession } from './focus'
+import type { ActiveLock } from './focus'
 import type { AiState } from './pages'
 
 /** Everything the popup and the on-page timer show about one site, computed by the background script. */
@@ -18,8 +18,8 @@ export interface SiteStatus {
   /** How the AI labelled this page, if it has. */
   category: Category | null
   ai: AiState
-  /** The focus session running right now, if any. */
-  focus: FocusSession | null
+  /** The focus session or quiet hours blocking distractions right now, if any. */
+  lock: ActiveLock | null
 }
 
 /** What the on-page timer shows. It's hidden when turned off and on study sites. */

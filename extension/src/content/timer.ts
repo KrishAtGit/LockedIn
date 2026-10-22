@@ -3,10 +3,11 @@
  * every few seconds and counts down locally in between, so it stays smooth without constant messaging.
  */
 import browser from 'webextension-polyfill'
+import { LOCK_KEYS, lockFractionLeft } from '../lib/focus'
 import { aiLabel } from '../lib/labels'
 import { clock, fractionLeft, limitState, ringSvg } from '../lib/ring'
 import type { TimerStatus } from '../lib/status'
-import { MINUTE, formatDuration } from '../lib/time'
+import { formatDuration } from '../lib/time'
 
 const POLL_MS = 10_000
 /** Ask more often while the AI is still labelling the page, so the label shows up soon after it's ready. */
@@ -183,14 +184,14 @@ async function main(): Promise<void> {
       place()
     }
 
-    const { usedMs, limitMs, warnMs, exempt, site, focus } = status
+    const { usedMs, limitMs, warnMs, exempt, site, lock } = status
     const left = limitMs - usedMs
-    // In a focus session the timer counts down the session, in the focus colour.
-    const focusLeft = focus ? focus.endsAt - Date.now() : 0
-    const state = focus ? 'lock' : exempt ? 'study' : limitState(usedMs, limitMs, warnMs)
-    const category = focus ? ' cat-lock' : status.category ? ` cat-${status.category}` : ''
+    // In a focus session or quiet hours the timer counts down the lock instead, in the lock colour.
+    const lockLeft = lock ? lock.endsAt - Date.now() : 0
+    const state = lock ? 'lock' : exempt ? 'study' : limitState(usedMs, limitMs, warnMs)
+    const category = lock ? ' cat-lock' : status.category ? ` cat-${status.category}` : ''
     ui.box.className = `timer ${state}${category}${collapsed ? ' collapsed' : ''}${drag ? ' dragging' : ''}`
-    const ringLeft = focus ? focusLeft / (focus.minutes * MINUTE) : exempt ? 1 : fractionLeft(usedMs, limitMs)
+    const ringLeft = lock ? lockFractionLeft(lock) : exempt ? 1 : fractionLeft(usedMs, limitMs)
     ui.ring.innerHTML = ringSvg(ringLeft, {
       size: collapsed ? RING_SIZE_COLLAPSED : RING_SIZE,
       stroke: 3,
@@ -206,11 +207,11 @@ async function main(): Promise<void> {
     ui.chip.textContent = label?.text ?? ''
     ui.chip.title = label?.detail ?? ''
 
-    ui.time.classList.toggle('word', !focus && exempt !== null)
-    if (focus) {
-      ui.time.textContent = clock(focusLeft)
+    ui.time.classList.toggle('word', !lock && exempt !== null)
+    if (lock) {
+      ui.time.textContent = clock(lockLeft)
       const small = document.createElement('small')
-      small.textContent = 'locked in'
+      small.textContent = lock.kind === 'focus' ? 'locked in' : 'quiet hours'
       ui.time.append(small)
       ui.detail.textContent = 'Distractions blocked'
     } else if (exempt) {
@@ -249,9 +250,9 @@ async function main(): Promise<void> {
       return
     }
     if (document.visibilityState !== 'visible' || !status) return
-    if (status.focus) {
-      // Ask again once the session is over, so the timer goes back to the daily limit.
-      if (status.focus.endsAt <= Date.now()) void refresh()
+    if (status.lock) {
+      // Ask again once the lock is over, so the timer goes back to the daily limit.
+      if (status.lock.endsAt <= Date.now()) void refresh()
       else render()
       return
     }
@@ -311,7 +312,7 @@ async function main(): Promise<void> {
       collapsed = Boolean(changes.timerCollapsed.newValue)
       render()
     }
-    if (changes.settings || changes.grants || changes.focus) void refresh()
+    if (changes.grants || LOCK_KEYS.some((key) => changes[key])) void refresh()
   })
 
   await refresh()

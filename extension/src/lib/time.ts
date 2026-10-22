@@ -1,4 +1,5 @@
 export const MINUTE = 60_000
+export const DAY = 24 * 60 * MINUTE
 
 /** Local calendar date, e.g. "2026-10-15". Usage resets at local midnight. */
 export function today(now = Date.now()): string {
@@ -13,4 +14,9 @@ export function formatDuration(ms: number): string {
   const m = totalMin % 60
   if (h === 0) return `${m}m`
   return m === 0 ? `${h}h` : `${h}h ${m}m`
+}
+
+/** e.g. "5:00 pm", in the user's own locale. */
+export function timeOfDay(ts: number): string {
+  return new Date(ts).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
 }

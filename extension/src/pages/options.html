@@ -96,6 +96,94 @@
         font-size: 12px;
       }
 
+      #quiet-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+      }
+      #quiet-list:empty::after {
+        content: 'No quiet hours yet. Distractions are only blocked when you start a focus session.';
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .quiet-row {
+        display: grid;
+        gap: 10px;
+        padding: 14px 0;
+        border-top: 1px solid var(--line);
+      }
+      .quiet-row:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+      .quiet-top,
+      .quiet-when {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px 14px;
+      }
+      .quiet-top .switch {
+        margin-left: auto;
+      }
+      .days {
+        display: flex;
+        gap: 4px;
+      }
+      .day {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .day input {
+        position: absolute;
+        inset: 0;
+        margin: 0;
+        opacity: 0;
+        cursor: inherit;
+      }
+      .day:has(input:checked) {
+        background: var(--invert-bg);
+        border-color: var(--invert-bg);
+        color: var(--invert-text);
+      }
+      .day:has(input:focus-visible) {
+        outline: 2px solid var(--focus);
+        outline-offset: 2px;
+      }
+      .times {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .times input {
+        width: auto;
+      }
+      .quiet-running {
+        color: var(--lock);
+      }
+      .quiet-row[data-running='true'] .days,
+      .quiet-row[data-running='true'] .times,
+      .quiet-row[data-running='true'] .switch {
+        opacity: 0.55;
+      }
+      .quiet-row [disabled],
+      .quiet-row .day:has([disabled]) {
+        cursor: not-allowed;
+      }
+      #quiet-add {
+        justify-self: start;
+      }
+
       #backend-status[data-ok='true'] {
         color: var(--study);
       }
@@ -162,6 +250,20 @@
           <input type="checkbox" id="show-timer" />
           Show a floating timer on websites
         </label>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <span class="eyebrow">Schedule</span>
+          <h2>Quiet hours</h2>
+          <p class="muted small">
+            Distraction sites are blocked at these times, like a focus session that starts by itself. Study sites and
+            everything else work as normal. New quiet hours start switched off so you can set them up first, and
+            quiet hours that are running can't be changed until they end.
+          </p>
+        </div>
+        <ul id="quiet-list"></ul>
+        <button type="button" id="quiet-add">Add quiet hours</button>
       </section>
 
       <section class="card">

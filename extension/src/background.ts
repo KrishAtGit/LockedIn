@@ -1,6 +1,13 @@
 import browser from 'webextension-polyfill'
 import { api } from './lib/api'
-import { addFocusRecord, blockedDuringFocus, getFocus, type FocusSession } from './lib/focus'
+import {
+  addFocusRecord,
+  blockedDuringFocus,
+  getActiveLock,
+  getFocus,
+  getQuietSkips,
+  type FocusSession,
+} from './lib/focus'
 import {
   aiState,
   getVerdict,
@@ -10,6 +17,7 @@ import {
   titleIsPlaceholder,
   type PageInfo,
 } from './lib/pages'
+import { activeQuietRun, nextQuietChange, type QuietRun } from './lib/schedule'
 import {
   baseLimitMs,
   getDaily,
@@ -17,11 +25,12 @@ import {
   getSettings,
   isAllowlisted,
   limitKey,
+  pruneOldDays,
   usedMs,
   type Excuse,
 } from './lib/storage'
 import type { SiteStatus, TimerStatus } from './lib/status'
-import { MINUTE, formatDuration, today } from './lib/time'
+import { MINUTE, formatDuration, timeOfDay, today } from './lib/time'
 
 /** The tab currently being timed. Kept in session storage because the service worker can be killed at any time. */
 interface Session {
@@ -34,6 +43,9 @@ interface Session {
 
 const TICK_ALARM = 'tick'
 const FOCUS_ALARM = 'focus-end'
+/** Fires when quiet hours next start or end. */
+const QUIET_ALARM = 'quiet-change'
+const PRUNE_ALARM = 'prune'
 const IDLE_SECONDS = 60
 /** Gaps longer than this between commits mean the machine slept or the worker was suspended, so they're not counted. */
 const MAX_COMMIT_GAP = 2 * MINUTE
@@ -161,13 +173,13 @@ async function enforce(target: Target): Promise<boolean> {
   const { domain } = target.page
   if (isAllowlisted(settings, domain) || (await isStudyPage(target.page.key))) return false
 
-  // During a focus session distractions are blocked outright, whatever time is left on their limit.
-  if (await getFocus()) {
+  // During a focus session or quiet hours distractions are blocked outright, whatever time is left on their limit.
+  if (await getActiveLock()) {
     const verdict = await getVerdict(target.page.key)
     if (blockedDuringFocus(settings, target.page, verdict)) {
       // Give the AI a moment first, so a lecture on YouTube isn't blocked before it's recognised as study.
       if (settings.backend.enabled && !verdict && waitingForVerdict(target.page.key)) return false
-      const params = new URLSearchParams({ mode: 'focus', key: limitKey(settings, domain), url: target.url })
+      const params = new URLSearchParams({ mode: 'lock', key: limitKey(settings, domain), url: target.url })
       await browser.tabs.update(target.tabId, { url: browser.runtime.getURL(`pages/blocked.html?${params}`) })
       return true
     }
@@ -276,6 +288,7 @@ function endFocusEarly(reason: string): Promise<void> {
       startedAt: focus.startedAt,
       minutes: focus.minutes,
       focusedMs: Date.now() - focus.startedAt,
+      kind: 'focus',
       completed: false,
       reason,
     })
@@ -296,6 +309,7 @@ function settleFinishedFocus(): Promise<void> {
       startedAt: focus.startedAt,
       minutes: focus.minutes,
       focusedMs: focus.endsAt - focus.startedAt,
+      kind: 'focus',
       completed: true,
     })
     await browser.storage.local.set({ focus: null })
@@ -308,19 +322,93 @@ function settleFinishedFocus(): Promise<void> {
   })
 }
 
-async function ensureAlarm(): Promise<void> {
+const sameRun = (a: QuietRun | null, b: QuietRun | null) => a?.id === b?.id && a?.start === b?.start
+
+/**
+ * Notices quiet hours starting or ending: announces a new block, files a finished one for the weekly report,
+ * and sets an alarm for the next change so blocking starts on the minute rather than at the next tick.
+ * The blocking itself doesn't depend on this; enforce() works it out from the schedule every time.
+ */
+function syncQuietHours(): Promise<void> {
+  return serial(async () => {
+    const now = Date.now()
+    const { quietHours } = await getSettings()
+    const current = activeQuietRun(quietHours, now, await getQuietSkips())
+    const { quietRun: previous = null } = (await browser.storage.local.get('quietRun')) as { quietRun?: QuietRun | null }
+
+    if (!sameRun(previous, current)) {
+      // A skipped run is filed when it's skipped, and a run you can't see the end of (its block was edited) isn't filed.
+      if (previous && previous.end <= now) {
+        await addFocusRecord({
+          kind: 'quiet',
+          startedAt: previous.start,
+          minutes: Math.round((previous.end - previous.start) / MINUTE),
+          focusedMs: previous.end - previous.start,
+          completed: true,
+        })
+      }
+      if (current) {
+        await browser.notifications.create('quiet-start', {
+          type: 'basic',
+          iconUrl: browser.runtime.getURL('icons/icon-128.png'),
+          title: `Quiet hours until ${timeOfDay(current.end)}`,
+          message: 'Distraction sites are blocked. Study sites and everything else work as normal.',
+        })
+      }
+      await browser.storage.local.set({ quietRun: current })
+    }
+
+    const next = nextQuietChange(quietHours, now)
+    if (next === null) await browser.alarms.clear(QUIET_ALARM)
+    // A moment after the change, so the schedule already reads the new state when the alarm fires.
+    else await browser.alarms.create(QUIET_ALARM, { when: next + 500 })
+  }).then(tick)
+}
+
+/** Skips the rest of the quiet-hours block running now. Only this run: the block comes back as scheduled. */
+function skipQuietHours(reason: string): Promise<void> {
+  return serial(async () => {
+    const now = Date.now()
+    const skips = await getQuietSkips()
+    const run = activeQuietRun((await getSettings()).quietHours, now, skips)
+    if (!run) return
+    // Old skips are dropped along the way, since a skip only ever matters until its run would have ended.
+    const kept = Object.fromEntries(Object.entries(skips).filter(([, end]) => end > now))
+    await browser.storage.local.set({ quietSkips: { ...kept, [run.id]: run.end }, quietRun: null })
+    await addFocusRecord({
+      kind: 'quiet',
+      startedAt: run.start,
+      minutes: Math.round((run.end - run.start) / MINUTE),
+      focusedMs: now - run.start,
+      completed: false,
+      reason,
+    })
+  }).then(syncQuietHours)
+}
+
+async function ensureAlarms(): Promise<void> {
   if (!(await browser.alarms.get(TICK_ALARM))) {
     await browser.alarms.create(TICK_ALARM, { periodInMinutes: 1 })
+  }
+  if (!(await browser.alarms.get(PRUNE_ALARM))) {
+    await browser.alarms.create(PRUNE_ALARM, { delayInMinutes: 1, periodInMinutes: 24 * 60 })
   }
 }
 
 browser.idle.setDetectionInterval(IDLE_SECONDS)
-void ensureAlarm()
+void ensureAlarms()
 void settleFinishedFocus()
+void syncQuietHours()
 
 browser.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === TICK_ALARM) void tick()
   if (alarm.name === FOCUS_ALARM) void settleFinishedFocus()
+  if (alarm.name === QUIET_ALARM) void syncQuietHours()
+  if (alarm.name === PRUNE_ALARM) void serial(() => pruneOldDays())
+})
+// A schedule edited in Settings can start or end quiet hours right away.
+browser.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.settings) void syncQuietHours()
 })
 browser.tabs.onActivated.addListener(() => void tick())
 browser.tabs.onUpdated.addListener((_id, change) => {
@@ -356,7 +444,7 @@ async function siteStatus(tab: browser.Tabs.Tab | undefined): Promise<SiteStatus
     allowlisted: isAllowlisted(settings, page.domain),
     category: verdict?.category ?? null,
     ai: await aiState(settings.backend.enabled, page, verdict),
-    focus: await getFocus(),
+    lock: await getActiveLock(),
   }
 }
 
@@ -364,8 +452,8 @@ async function siteStatus(tab: browser.Tabs.Tab | undefined): Promise<SiteStatus
 async function timerStatus(tab: browser.Tabs.Tab | undefined): Promise<TimerStatus> {
   const status = await siteStatus(tab)
   if (!status || !(await getSettings()).showTimer) return { show: false }
-  // Study sites have nothing to count, so the timer only appears there to show a focus session.
-  if (status.allowlisted && !status.focus) return { show: false }
+  // Study sites have nothing to count, so the timer only appears there to show a focus session or quiet hours.
+  if (status.allowlisted && !status.lock) return { show: false }
   return { show: true, ...status }
 }
 
@@ -379,6 +467,7 @@ type Message =
   /** Sent by the popup. */
   | { type: 'focus-start'; minutes: number }
   | { type: 'focus-end-early'; reason: string }
+  | { type: 'quiet-skip'; reason: string }
 
 browser.runtime.onMessage.addListener((message: unknown, sender: browser.Runtime.MessageSender) => {
   const msg = message as Message
@@ -386,6 +475,7 @@ browser.runtime.onMessage.addListener((message: unknown, sender: browser.Runtime
   if (msg.type === 'site-status') return browser.tabs.get(msg.tabId).then(siteStatus)
   if (msg.type === 'focus-start') return startFocus(msg.minutes)
   if (msg.type === 'focus-end-early') return endFocusEarly(msg.reason)
+  if (msg.type === 'quiet-skip') return skipQuietHours(msg.reason)
   if (msg.type !== 'excuse') return undefined
   const excuse: Excuse = {
     ts: Date.now(),

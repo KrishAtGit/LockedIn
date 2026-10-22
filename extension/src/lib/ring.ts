@@ -57,6 +57,13 @@ export function clock(ms: number): string {
   return h > 0 ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}:${String(s).padStart(2, '0')}`
 }
 
+/** Readouts with hours ("2h 42m") are wider than "42:10", so they're set smaller to fit inside the ring. */
+export function setClock(el: HTMLElement, ms: number): void {
+  const text = clock(ms)
+  el.textContent = text
+  el.classList.toggle('long', text.includes('h'))
+}
+
 /** Which colour state a site is in: plenty left, close to the limit, or over it. */
 export function limitState(usedMs: number, limitMs: number, warnMs: number): 'ok' | 'warn' | 'over' {
   const left = limitMs - usedMs
