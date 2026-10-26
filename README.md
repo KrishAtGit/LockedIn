@@ -1,169 +1,190 @@
 # LockedIn
 
-**A study-aware focus extension for university students.**
+**A focus extension for students that can tell a lecture from a rabbit hole.**
 
-LockedIn distinguishes lectures from distractions, adapts to your study habits, and adds friction when you try to exceed your limits. Before granting more time, it asks one question: **Why?**
+[![Backend](https://github.com/KrishAtGit/LockedIn/actions/workflows/backend.yml/badge.svg)](https://github.com/KrishAtGit/LockedIn/actions/workflows/backend.yml)
+[![Extension](https://github.com/KrishAtGit/LockedIn/actions/workflows/extension.yml/badge.svg)](https://github.com/KrishAtGit/LockedIn/actions/workflows/extension.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> **Status:** Early development. Not yet available on browser extension stores. Install from source using the instructions below.
+Most site blockers treat YouTube as one thing. LockedIn looks at the page: a recorded lecture doesn't count toward your limit, Shorts do. When your time runs out, it doesn't just let you click "5 more minutes". It asks **why**, and an AI decides whether the reason holds up.
 
-## Features
+**Live API:** [lockedin-api…azurecontainerapps.io](https://lockedin-api.whiteocean-2a07b317.australiaeast.azurecontainerapps.io) (interactive docs) · Chrome + Firefox · MV3
 
-### Working
+## Demo
 
-- **Per-site time tracking** — Tracks active browsing time and counts audible tabs, including lectures and videos.
-- **Daily time limits** — Starts with a default limit of 60 minutes per site, with custom limits and an unrestricted study allowlist.
-- **Visual timers** — Displays a countdown dial in the popup and a draggable floating timer on web pages. The ring reflects the page's AI classification, while the remaining time changes from normal to amber and red.
-- **Configurable warnings** — Sends a notification a specified number of minutes before a limit is reached.
-- **Intentional time extensions** — Redirects you to a *Need more time?* page when a limit is reached. You must provide a reason and wait before continuing, with longer waits for repeated requests.
-- **Excuse history** — Logs every request for additional time so you can review your decisions later.
+<!-- Paste your Cursorful video here: open this file in GitHub's editor, drag the .mp4 onto this line, and
+     GitHub uploads it and inserts a player link. Keep it under 100 MB (about 1–2 minutes). -->
 
-### Optional AI backend
+> 🎥 _Demo video coming soon._
 
-The AI backend adds page classification and reason evaluation through a self-hosted FastAPI service.
+<!-- Screenshots: save these files in docs/screenshots/, then uncomment this block.
+<p align="center">
+  <img src="docs/screenshots/popup.png" width="24%" alt="Popup with the timer dial" />
+  <img src="docs/screenshots/focus.png" width="24%" alt="Popup during a focus session" />
+  <img src="docs/screenshots/blocked.png" width="24%" alt="The page shown when you're locked in" />
+  <img src="docs/screenshots/report.png" width="24%" alt="Weekly report" />
+</p>
+-->
 
-- **Context-aware page classification** — Labels pages as `study`, `distraction`, or `neutral` using built-in rules, a cache, and a local Ollama model.
-- **Study-friendly browsing** — Study pages are excluded from time limits and blocking. For example, a YouTube lecture can remain accessible while YouTube Shorts are restricted.
-- **AI-evaluated extensions** — Evaluates your reasons for requesting more time. Vague justifications can be denied, increasing the wait before the next request.
-- **Local AI inference** — Uses Ollama without requiring external AI API keys or subscriptions.
-- **Graceful fallback** — If the backend is unavailable, the extension continues working without AI features.
+## What it does
 
-See [`backend/README.md`](backend/README.md) for setup instructions.
+| | |
+|---|---|
+| **Per-site limits** | Tracks active time per site (audible tabs too, so a lecture playing in the background counts) with a daily limit, per-site overrides and a list of study sites that are never limited. |
+| **Knows study from distraction** | Each page is labelled study, distraction or neutral. Study pages stop the clock. |
+| **"Why?" before more time** | Hitting a limit opens a page where you explain what you need the time for. The AI allows or denies it, and each request makes the next wait longer. |
+| **Focus sessions** | Lock in for 25, 50 or 90 minutes. Distractions are blocked outright; ending early takes a written reason and a 15-second wait. |
+| **Quiet hours** | Weekly schedules (overnight ones too) that block distractions automatically. Running blocks can't be edited, only skipped with a reason. |
+| **Weekly report** | Seven days of studying vs counted time, top sites, sessions kept vs ended early, and every reason you gave. Computed and stored on your device. |
+| **Floating timer** | A small, draggable dial on every page. Ring colour shows the AI's label; the numbers turn amber, then red, as time runs out. |
 
-### Planned
+## Architecture
 
-- **Focus sessions** — 25- and 50-minute sessions that block distractions.
-- **Quiet hours** — Automatically restrict distracting sites during scheduled periods.
-- **Weekly reports** — Review time spent per site, study-versus-distraction breakdowns, and extension requests.
-- **Deadline-aware limits** — Adapt limits using deadlines from Canvas, Moodle, and Google Calendar.
-- **Cloud deployment** — Deploy the backend using AWS ECS Fargate, RDS, Terraform, and GitHub Actions.
-- **Browser store releases** — Publish on the Chrome Web Store and Firefox Add-ons.
+```mermaid
+flowchart LR
+  subgraph Browser["Browser (Chrome / Firefox)"]
+    EXT["Extension<br/>TypeScript · MV3<br/>timers, limits, sessions,<br/>weekly report (on-device)"]
+  end
 
----
+  subgraph Azure["Azure · Australia East"]
+    API["FastAPI<br/>Container Apps<br/>scales to zero"]
+    DB[("PostgreSQL<br/>Flexible Server<br/>verdict cache")]
+  end
 
-## Installation
+  OLLAMA["Ollama · Llama 3.2<br/>(self-hosted)"]
 
-### Prerequisites
+  EXT -- "page domain + title<br/>reasons for more time" --> API
+  API --> DB
+  API -. "when AI is enabled" .-> OLLAMA
 
-- Node.js 20 or later
+  GH["GitHub Actions"] -- "test → build image → deploy (OIDC)" --> API
+  TF["Terraform"] -- "provisions" --> Azure
+```
 
-### 1. Build the extension
+The extension does everything it can locally: time tracking, limits, sessions, schedules and the report never leave your browser. It only calls the API to label a page or judge a reason, and keeps working without it.
+
+## How a page gets labelled
+
+```
+request ─▶ rules ─▶ cache (Postgres) ─▶ LLM (Ollama) ─▶ fallback
+            │          │                    │
+         instant     seen before         down or slow?
+                                          → still answers
+```
+
+1. **Rules** answer the obvious cases for free: LMS and `.edu` sites, social media, YouTube Shorts, educational video titles.
+2. **Cache:** every AI verdict is stored by domain, path and normalised title, so the same page never goes to the model twice. More users means more cache hits.
+3. **LLM:** Llama 3.2 3B via Ollama, with output constrained to a JSON schema.
+4. **Fallback:** if the model is off, slow or broken, the API still answers from the rules.
+
+**Measured, not assumed.** On a 25-page labelled evaluation set, `llama3.2:3b` gets **24/25 (96%)** with no help from the rules. The first prompt scored 76% once general-interest pages were added (the model called almost anything readable "study"); a stricter definition of study fixed it. Details in [`backend/README.md`](backend/README.md).
+
+## Engineering
+
+- **Infrastructure as code:** Azure Container Apps, PostgreSQL Flexible Server, Log Analytics and a monthly budget alert are all defined in [Terraform](infra/).
+- **CI/CD:** every push runs the test suites. Pushes to `main` build a Docker image, push it to GitHub Container Registry, roll it out to Azure and wait for a healthy `/health`.
+- **No stored cloud credentials:** GitHub Actions signs in to Azure with OIDC. Azure trusts GitHub's short-lived token only for this repo's `main` branch, and only for this resource group.
+- **Costs nothing when idle:** the API scales to zero replicas; a budget alert emails at 50% and 90% of the monthly limit.
+- **53 automated tests:** 31 pytest (rules, cache, fallbacks, validation, with a fake model) and 22 Vitest, including timezone- and DST-aware schedule tests run in `Australia/Melbourne`.
+- **Privacy by default:** browsing history and analytics stay in the browser; data older than 90 days is deleted automatically.
+
+## Tech stack
+
+| Area | Tools |
+|---|---|
+| Extension | TypeScript, Manifest V3, Vite, webextension-polyfill, Vitest |
+| API | Python, FastAPI, Pydantic, SQLAlchemy (async), Alembic, pytest |
+| AI | Ollama, Llama 3.2 3B, JSON-schema constrained output |
+| Data | PostgreSQL (asyncpg) |
+| Cloud | Azure Container Apps, Azure Database for PostgreSQL, Log Analytics |
+| Infra & delivery | Terraform, Docker, GitHub Actions, GitHub Container Registry, OIDC |
+
+## Run it
+
+### The extension
 
 ```bash
 cd extension
 npm install
-npm run build
+npm run build        # outputs dist/chrome and dist/firefox
 ```
 
-The build outputs are generated in `extension/dist/chrome` and `extension/dist/firefox`.
-
-### 2. Load in your browser
-
 <details>
-<summary><strong>Chrome, Edge, and Brave</strong></summary>
+<summary><strong>Load it in Chrome, Edge or Brave</strong></summary>
 
-1. Open `chrome://extensions` or the equivalent extensions page in your browser.
-2. Enable **Developer mode**.
-3. Select **Load unpacked**.
-4. Choose the `extension/dist/chrome` directory.
+1. Open `chrome://extensions` and turn on **Developer mode**.
+2. Click **Load unpacked** and choose `extension/dist/chrome`.
 
 </details>
 
 <details>
-<summary><strong>Firefox</strong></summary>
+<summary><strong>Load it in Firefox</strong></summary>
 
 1. Open `about:debugging#/runtime/this-firefox`.
-2. Select **Load Temporary Add-on**.
-3. Choose `extension/dist/firefox/manifest.json`.
-
-Temporary add-ons are removed when Firefox restarts. Signed builds are planned for future releases.
+2. Click **Load Temporary Add-on** and choose `extension/dist/firefox/manifest.json`.
 
 </details>
 
----
+### Connect the AI
 
-## Enabling the AI backend
+In the extension's **Settings → AI backend**, turn on **Use the AI backend** and enter a server address:
 
-The AI backend is optional. The extension works without it.
+- **Hosted:** `https://lockedin-api.whiteocean-2a07b317.australiaeast.azurecontainerapps.io` (rules and shared cache).
+- **Your own, with the full model:**
 
-### 1. Start the services
+  ```bash
+  ollama serve                  # terminal 1
+  ollama pull llama3.2:3b       # terminal 2, once
+  docker compose up --build     # terminal 2: API + Postgres at http://localhost:8000
+  ```
 
-Start Ollama in one terminal:
+Click **Test connection** to check it.
+
+### Deploy your own
 
 ```bash
-ollama serve
+cd infra
+cp terraform.tfvars.example terraform.tfvars   # your subscription ID and alert email
+terraform init && terraform plan && terraform apply
 ```
 
-Start the FastAPI backend in another:
+Then set the three `github_variables` outputs as repository variables, and every push to `main` deploys.
+
+## Tests
 
 ```bash
-cd backend
-uv run uvicorn app.main:app
+cd backend && uv run pytest                              # API
+cd backend && uv run python -m scripts.eval_classifier   # model accuracy on the labelled set
+cd extension && npm test                                 # extension logic
 ```
 
-Follow [`backend/README.md`](backend/README.md) for model setup, configuration, and any additional service requirements.
-
-### 2. Connect the extension
-
-1. Open the extension's **Settings → AI backend**.
-2. Enable **Use the AI backend**.
-3. Allow the requested server access when prompted by your browser.
-4. Select **Test connection** and confirm that the status reports *AI ready*.
-
----
-
-## Development
-
-Run these commands from the `extension/` directory.
-
-| Command | Description |
-|---|---|
-| `npm run dev` | Rebuilds the Chrome extension when files change |
-| `npm run dev:firefox` | Rebuilds the Firefox extension when files change |
-| `npm run typecheck` | Checks TypeScript types |
-| `npm run api:types` | Regenerates TypeScript types from the backend's OpenAPI schema |
-
-After rebuilding, open `chrome://extensions` and click the reload icon on the LockedIn extension card to apply the changes.
-
-### Project structure
+## Project structure
 
 ```text
-backend/                  # FastAPI backend
-  └── README.md            # Backend setup and configuration
-
-docker-compose.yml         # API and PostgreSQL services
-
-extension/
-├── src/
-│   ├── background.ts      # Time tracking, limits, AI labels, and grants
-│   ├── content/
-│   │   └── timer.ts       # Floating on-page timer
-│   ├── manifest.ts        # Chrome and Firefox manifests
-│   ├── lib/
-│   │   ├── ring.ts        # SVG timer dial and countdown helpers
-│   │   ├── api.ts         # Backend client
-│   │   ├── api-types.ts   # Generated API types
-│   │   └── ...            # Storage, labels, and time utilities
-│   ├── pages/             # Popup, settings, and extension-limit page
-│   └── public/icons/      # Extension icons
-└── scripts/
-    └── make-icons.mjs     # Icon generation
+extension/          TypeScript MV3 extension
+  src/background.ts   time tracking, limits, sessions, quiet hours, AI labels
+  src/content/        floating on-page timer
+  src/lib/            schedule, report, storage and timer logic (+ tests)
+  src/pages/          popup, settings, blocked page, weekly report
+backend/            FastAPI service: rules, cache, Ollama client, evaluation script
+infra/              Terraform for Azure
+.github/workflows/  CI/CD
+docker-compose.yml  API + Postgres for local development
 ```
-
----
 
 ## Privacy
 
-**Your browsing data stays local by default.**
+- Time tracking, sessions, schedules and the weekly report are stored only in your browser.
+- With the AI backend on, the current page's domain, path and title, and any reason you type for more time, are sent to the server you choose. Nothing else is sent.
+- The AI backend is off until you turn it on.
 
-- **Local storage:** Tracking data is stored in your browser using `storage.local`.
-- **Optional backend:** When enabled, the extension sends the current page's domain, path, title, and any reasons you submit to the server you configure.
-- **Self-hosted processing:** You control the backend and where it runs.
-- **No third-party transmission:** The extension does not intentionally send this data to other services.
+## Roadmap
 
-The AI backend is disabled by default. Review the backend configuration and network behaviour before using it with sensitive browsing data.
-
----
+- [ ] Hosted AI for everyone (Ollama on Azure, scaling to zero)
+- [ ] Chrome Web Store and Firefox Add-ons release
+- [ ] "Wrong label?" feedback, then a small custom classifier trained on it
+- [ ] Deadline-aware limits from Canvas, Moodle and Google Calendar
 
 ## License
 
-Released under the [MIT License](LICENSE).
+[MIT](LICENSE)
