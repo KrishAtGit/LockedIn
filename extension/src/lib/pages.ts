@@ -59,9 +59,14 @@ export async function saveVerdict(key: string, verdict: PageVerdict): Promise<vo
   await browser.storage.session.set({ verdicts })
 }
 
-/** Remembers whether the last call to the backend failed, so the popup and timer can say the AI is offline. */
-export async function setBackendDown(down: boolean): Promise<void> {
-  await browser.storage.session.set({ backendDown: down })
+/**
+ * How the backend answered last: fine, unreachable (or its AI is), or running without AI on purpose, like the
+ * hosted server. Only 'down' is worth an "AI offline" warning; a server without AI just labels what its rules know.
+ */
+export type BackendState = 'ok' | 'down' | 'no-ai'
+
+export async function setBackendState(state: BackendState): Promise<void> {
+  await browser.storage.session.set({ backendState: state })
 }
 
 /**
@@ -77,6 +82,7 @@ export async function aiState(
   if (verdict) return 'labelled'
   // Nothing to say about a page whose title is just the site name, unless the site rules already labelled it.
   if (!backendEnabled || titleIsPlaceholder(page)) return 'off'
-  const { backendDown } = await browser.storage.session.get('backendDown')
-  return backendDown ? 'offline' : 'checking'
+  const { backendState } = await browser.storage.session.get('backendState')
+  if (backendState === 'no-ai') return 'off'
+  return backendState === 'down' ? 'offline' : 'checking'
 }

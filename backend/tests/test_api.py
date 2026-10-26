@@ -6,6 +6,12 @@ from tests.conftest import FakeAI
 pytestmark = pytest.mark.asyncio
 
 
+async def test_root_redirects_to_docs(client: AsyncClient) -> None:
+    response = await client.get("/")
+    assert response.status_code == 307
+    assert response.headers["location"] == "/docs"
+
+
 async def test_health(client: AsyncClient) -> None:
     body = (await client.get("/health")).json()
     assert body == {

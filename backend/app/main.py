@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 
 from app.ai.ollama import OllamaClient
 from app.api.routes import router
@@ -43,6 +44,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["Content-Type"],
     )
     app.include_router(router)
+
+    # Someone opening the bare server address in a browser gets the interactive docs, not a 404.
+    @app.get("/", include_in_schema=False)
+    async def root() -> RedirectResponse:
+        return RedirectResponse("/docs")
+
     return app
 
 

@@ -13,7 +13,7 @@ import {
   getVerdict,
   pageInfo,
   saveVerdict,
-  setBackendDown,
+  setBackendState,
   titleIsPlaceholder,
   type PageInfo,
 } from './lib/pages'
@@ -116,11 +116,14 @@ async function currentTarget(): Promise<Target | null> {
 const classifying = new Set<string>()
 // Pages titled with just the site name that were already sent once, so they aren't asked about on every tick.
 const askedPlaceholders = new Set<string>()
+// Pages a server without AI had no rule for. Asking again would get the same answer.
+const unlabelled = new Set<string>()
 
 /** Asks the backend about a page in the background, then re-checks limits once the answer is in. */
 async function classify(page: PageInfo): Promise<void> {
   const settings = await getSettings()
-  if (!settings.backend.enabled || classifying.has(page.key) || askedPlaceholders.has(page.key)) return
+  if (!settings.backend.enabled || classifying.has(page.key)) return
+  if (askedPlaceholders.has(page.key) || unlabelled.has(page.key)) return
   if (await getVerdict(page.key)) return
   const placeholder = titleIsPlaceholder(page)
 
@@ -131,9 +134,15 @@ async function classify(page: PageInfo): Promise<void> {
       path: page.path,
       title: page.title,
     })
-    await setBackendDown(result.source === 'fallback')
-    // A fallback means the server couldn't decide (its AI is down). Don't remember that, so it's retried later.
-    if (result.source === 'fallback') return
+    if (result.source === 'fallback') {
+      // The server couldn't decide. If its AI is switched off, that's its final answer; if the AI is down, it
+      // isn't, so the page is retried later.
+      const noAi = (await api.health(settings.backend.url)).ai === 'disabled'
+      await setBackendState(noAi ? 'no-ai' : 'down')
+      if (noAi) unlabelled.add(page.key)
+      return
+    }
+    await setBackendState('ok')
     // A title like "Instagram" (or "YouTube" while a video loads) says nothing about the page itself, so only
     // a verdict about the whole site is worth keeping. The real title gets its own verdict once it arrives.
     if (placeholder) askedPlaceholders.add(page.key)
@@ -142,7 +151,7 @@ async function classify(page: PageInfo): Promise<void> {
       void tick()
     }
   } catch (err) {
-    await setBackendDown(true)
+    await setBackendState('down')
     console.warn('[LockedIn] Could not classify page:', err)
   } finally {
     classifying.delete(page.key)
