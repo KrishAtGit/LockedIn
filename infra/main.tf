@@ -72,6 +72,12 @@ resource "azurerm_container_app_environment" "main" {
   resource_group_name        = azurerm_resource_group.main.name
   location                   = azurerm_resource_group.main.location
   log_analytics_workspace_id = azurerm_log_analytics_workspace.logs.id
+
+  # Azure now creates every environment with this pay-per-use profile, so declare it rather than fight it.
+  workload_profile {
+    name                  = "Consumption"
+    workload_profile_type = "Consumption"
+  }
 }
 
 locals {
@@ -89,6 +95,7 @@ resource "azurerm_container_app" "api" {
   resource_group_name          = azurerm_resource_group.main.name
   container_app_environment_id = azurerm_container_app_environment.main.id
   revision_mode                = "Single"
+  workload_profile_name        = "Consumption"
 
   secret {
     name  = "database-url"
@@ -98,6 +105,7 @@ resource "azurerm_container_app" "api" {
   ingress {
     external_enabled = true
     target_port      = 8000
+    transport        = "http"
     traffic_weight {
       latest_revision = true
       percentage      = 100
