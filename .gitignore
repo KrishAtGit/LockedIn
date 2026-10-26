@@ -7,3 +7,9 @@ dist/
 __pycache__/
 .pytest_cache/
 *.db
+
+# Terraform: state holds the database password, so it never goes in git.
+infra/.terraform/
+*.tfstate
+*.tfstate.*
+infra/terraform.tfvars
