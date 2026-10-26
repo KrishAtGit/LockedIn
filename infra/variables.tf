@@ -22,9 +22,12 @@ variable "image" {
 }
 
 variable "github_repo" {
-  description = "owner/repo allowed to deploy from its main branch."
+  description = <<-EOT
+    The repo allowed to deploy from its main branch, as GitHub names it in its OIDC tokens: owner@id/repo@id.
+    The IDs never change, so a renamed or re-created repo with the same name can't deploy here.
+  EOT
   type        = string
-  default     = "KrishAtGit/LockedIn"
+  default     = "KrishAtGit@193048311/LockedIn@1420275642"
 }
 
 variable "alert_email" {
