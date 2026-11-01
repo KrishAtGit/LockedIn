@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -6,7 +7,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Configuration, read from environment variables (or a .env file)."""
 
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="LOCKEDIN_")
+    # backend/.env, wherever the server is started from. A relative ".env" would be silently skipped when
+    # starting from the repo root, falling back to a Postgres URL that doesn't exist locally.
+    model_config = SettingsConfigDict(env_file=Path(__file__).resolve().parent.parent / ".env", env_prefix="LOCKEDIN_")
 
     database_url: str = "postgresql+asyncpg://lockedin:lockedin@localhost:5432/lockedin"
 

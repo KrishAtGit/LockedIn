@@ -78,8 +78,11 @@ export async function aiState(
   backendEnabled: boolean,
   page: PageInfo,
   verdict: PageVerdict | undefined,
+  /** The server answered, but has no AI to label pages its rules don't know. Not an outage. */
+  answeredWithoutAi = false,
 ): Promise<AiState> {
   if (verdict) return 'labelled'
+  if (answeredWithoutAi) return 'off'
   // Nothing to say about a page whose title is just the site name, unless the site rules already labelled it.
   if (!backendEnabled || titleIsPlaceholder(page)) return 'off'
   const { backendState } = await browser.storage.session.get('backendState')

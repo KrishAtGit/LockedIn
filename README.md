@@ -130,7 +130,7 @@ npm run build        # outputs dist/chrome and dist/firefox
 In the extension's **Settings → AI backend**, turn on **Use the AI backend** and enter a server address:
 
 - **Hosted:** `https://lockedin-api.whiteocean-2a07b317.australiaeast.azurecontainerapps.io` (rules and shared cache).
-- **Your own, with the full model:**
+- **Your own, with the full model:** run `./scripts/dev.sh`. It starts Ollama (pulling the model the first time) and the API on `http://localhost:8000`. Or by hand:
 
   ```bash
   ollama serve                  # terminal 1

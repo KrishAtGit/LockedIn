@@ -452,7 +452,7 @@ async function siteStatus(tab: browser.Tabs.Tab | undefined): Promise<SiteStatus
     exempt: study ? 'study-page' : null,
     allowlisted: isAllowlisted(settings, page.domain),
     category: verdict?.category ?? null,
-    ai: await aiState(settings.backend.enabled, page, verdict),
+    ai: await aiState(settings.backend.enabled, page, verdict, unlabelled.has(page.key)),
     lock: await getActiveLock(),
   }
 }

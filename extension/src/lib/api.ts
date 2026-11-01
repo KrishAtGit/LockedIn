@@ -28,7 +28,8 @@ async function call<T>(baseUrl: string, path: string, timeoutMs: number, body?: 
 }
 
 export const api = {
-  health: (baseUrl: string) => call<Health>(baseUrl, '/health', 5_000),
+  // A hosted server that scaled to zero can take ~15s to wake, so don't give up on it too early.
+  health: (baseUrl: string) => call<Health>(baseUrl, '/health', 20_000),
   classify: (baseUrl: string, req: ClassifyRequest) => call<ClassifyResponse>(baseUrl, '/classify', 30_000, req),
   // The server waits up to ~20s for the model before falling back, so give it a little longer than that.
   judge: (baseUrl: string, req: JudgeRequest) => call<JudgeResponse>(baseUrl, '/judge-reason', 30_000, req),

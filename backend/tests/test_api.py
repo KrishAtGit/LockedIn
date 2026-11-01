@@ -81,6 +81,9 @@ async def test_judge_fallback_rules(client: AsyncClient, fake_ai: FakeAI) -> Non
     assert (await judge("Submitting my SIT315 report on the portal"))["allow"] is True
     assert (await judge("just one more video"))["allow"] is False
     assert (await judge("bored lol"))["allow"] is False
+    assert (await judge("just 5 more mins pls"))["allow"] is False
+    assert (await judge("need to scroll a bit longer"))["allow"] is False
+    assert (await judge("Finishing the week 6 lecture before my quiz"))["allow"] is True
     assert (await judge("Submitting my SIT315 report on the portal", asks_today=3))["allow"] is False
     assert (await judge("Submitting my report"))["source"] == "fallback"
 

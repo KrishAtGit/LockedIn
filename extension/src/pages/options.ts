@@ -190,7 +190,7 @@ async function requestAccess(url: string): Promise<boolean> {
 }
 
 async function testBackend(): Promise<void> {
-  setBackendStatus('Checking…')
+  setBackendStatus('Checking… (a server that was idle can take a few seconds to wake up)')
   try {
     const health = await api.health(settings.backend.url)
     if (!health.database) setBackendStatus('Connected, but the server has no database.', false)

@@ -45,7 +45,10 @@ async def classify_page(
     if verdict := rules.classify(domain, req.path, req.title):
         counters.rules += 1
         return ClassifyResponse(
-            category=verdict.category, confidence=verdict.confidence, reason=verdict.reason, source="rules"
+            category=verdict.category, 
+            confidence=verdict.confidence, 
+            reason=verdict.reason, 
+            source="rules"
         )
 
     key = cache_key(domain, req.path, req.title)
@@ -54,18 +57,28 @@ async def classify_page(
         if cached:
             cached.hits += 1
             await session.commit()
+
     except DB_ERRORS as err:
         log.warning("Cache lookup skipped, database unavailable: %s", err)
         cached = None
+
     if cached:
         counters.cache_hits += 1
         return ClassifyResponse(
-            category=cached.category, confidence=cached.confidence, reason=cached.reason, source="cache"
+            category=cached.category,
+            confidence=cached.confidence,
+            reason=cached.reason,
+            source="cache"
         )
 
     if ai is None:
         counters.fallbacks += 1
-        return ClassifyResponse(category="neutral", confidence=0, reason="AI is turned off", source="fallback")
+        return ClassifyResponse(
+            category="neutral",
+            confidence=0,
+            reason="No built-in rule matched, and this server runs without AI",
+            source="fallback",
+        )
 
     try:
         result = await ai.classify_page(domain, req.path, req.title)
@@ -99,7 +112,9 @@ async def classify_page(
 
 
 LAZY_REASON = re.compile(
-    r"\b(one more|bored|boring|deserve|i want|idk|dunno|chill|relax|for fun|because)\b", re.IGNORECASE
+    r"\b(one more|\d+ more|few more|more mins?|just a (bit|sec|min)|bored|boring|deserve|i want|idk|dunno|chill|"
+    r"relax|for fun|because|pls|plz|scroll\w*)\b",
+    re.IGNORECASE,
 )
 MAX_FALLBACK_ASKS = 3
 
@@ -108,23 +123,41 @@ def judge_by_rules(req: JudgeRequest) -> JudgeResponse:
     """Used when the model is off or down: allow specific-sounding reasons, deny excuses and repeat asks."""
     if req.asks_today >= MAX_FALLBACK_ASKS:
         return JudgeResponse(
-            allow=False, message=f"That's {req.asks_today} asks today already. Time to step away.", source="fallback"
+            allow=False, 
+            message=f"That's {req.asks_today} asks today already. Time to step away.", 
+            source="fallback"
         )
     if LAZY_REASON.search(req.reason) or len(req.reason.split()) < 4:
         return JudgeResponse(
-            allow=False, message="That doesn't sound like something that can't wait.", source="fallback"
+            allow=False, 
+            message="That doesn't sound like something that can't wait.", 
+            source="fallback"
         )
-    return JudgeResponse(allow=True, message=f"Okay, {req.minutes} more minutes. Make them count.", source="fallback")
+    return JudgeResponse(
+        allow=True, 
+        message=f"Okay, {req.minutes} more minutes. Make them count.", 
+        source="fallback"
+    )
 
 
 async def judge_reason(req: JudgeRequest, ai: AIClient | None) -> JudgeResponse:
     if ai is None:
         return judge_by_rules(req)
     try:
-        verdict = await ai.judge_reason(req.domain, req.reason, req.minutes, req.asks_today, req.used_minutes)
+        verdict = await ai.judge_reason(
+            req.domain, 
+            req.reason, 
+            req.minutes, 
+            req.asks_today, 
+            req.used_minutes
+        )
     except AIUnavailable:
         return judge_by_rules(req)
-    return JudgeResponse(allow=verdict.allow, message=verdict.message, source="ai")
+    return JudgeResponse(
+        allow=verdict.allow, 
+        message=verdict.message, 
+        source="ai"
+        )
 
 
 async def stats(session: AsyncSession, counters: Counters) -> Stats:

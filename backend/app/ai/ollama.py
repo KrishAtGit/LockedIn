@@ -13,7 +13,7 @@ class AIUnavailable(Exception):
     """Ollama is down, too slow, missing the model, or returned something unusable. Callers fall back to rules."""
 
 
-# Field order matters: the model writes its reason first, then commits to a category based on it.
+# Field order: the model writes its reason first, then commits to a category based on it.
 class PageVerdict(BaseModel):
     reason: str = Field(max_length=300)
     category: Category
